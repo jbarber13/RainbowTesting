@@ -104,7 +104,7 @@ contract RainbowRouter is BaseAggregator {
     /// This is done by evaluating the value of status, which is set to 2
     /// only during swaps due to the "nonReentrant" modifier
     receive() external payable {
-        require(status == 2 || msg.sender == owner, "NO_RECEIVE");
+        //require(status == 2 || msg.sender == owner, "NO_RECEIVE");
     }
 
     /// @dev method to add or remove swap targets from swapTargets

@@ -2,7 +2,10 @@
   "dependencies": {
     "@noble/curves": "^1.6.0",
     "@openzeppelin/contracts": "5.0.2",
-    "@uniswap/v3-periphery": "^1.4.4"
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "@uniswap/v3-periphery": "^1.4.4",
+    "typechain": "^8.3.2"
   },
   "scripts": {
     "compile": "npx hardhat compile",
@@ -14,15 +17,14 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.13.0",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.7",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "@nomicfoundation/hardhat-ignition": "^0.15.7",
-    "@nomicfoundation/hardhat-ignition-viem": "^0.15.7",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
-    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.11",
-    "@nomicfoundation/hardhat-viem": "^2.0.5",
     "@nomicfoundation/ignition-core": "^0.15.7",
     "@types/chai": "4.3.19",
-    "@types/chai-as-promised": "^8.0.1",
     "@types/mocha": "^10.0.9",
     "@types/node": "^22.8.1",
     "chai": "4.5.0",
@@ -32,18 +34,17 @@
     "eth-sig-util": "^3.0.1",
     "ethereum-waffle": "^4.0.10",
     "ethereumjs-util": "^7.1.5",
-    "ethers": "^6.13.4",
+    "ethers": "^6.13.5",
     "globals": "^15.11.0",
-    "hardhat": "^2.22.15",
-    "hardhat-gas-reporter": "^2.2.1",
+    "hardhat": "^2.23.0",
+    "hardhat-gas-reporter": "1.0.8",
     "hardhat-tracer": "^3.1.0",
     "node-fetch": "^3.3.2",
     "prettier": "^3.3.3",
     "prettier-plugin-solidity": "^1.4.1",
     "solidity-coverage": "^0.8.13",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.3",
-    "viem": "2.21.27"
+    "typescript": "5.0.4"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

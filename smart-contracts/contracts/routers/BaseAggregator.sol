@@ -8,6 +8,8 @@ import "../libraries/SafeTransferLib.sol";
 import "../libraries/CanoeHelper.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import "hardhat/console.sol";
+
 /// @title Rainbow base aggregator contract
 contract BaseAggregator {
     /// @dev Used to prevent re-entrancy
@@ -16,9 +18,8 @@ contract BaseAggregator {
     /// @dev Set of allowed swapTargets.
     mapping(address => bool) public swapTargets;
 
-
     // @dev set of valid signers
-    mapping(address=>bool) public validSigners;
+    mapping(address => bool) public validSigners;
 
     /// @dev modifier that prevents reentrancy attacks on specific methods
     modifier nonReentrant() {
@@ -47,8 +48,6 @@ contract BaseAggregator {
         _;
     }
 
-
-
     /** EXTERNAL **/
 
     /// @param buyTokenAddress the address of token that the user should receive
@@ -62,10 +61,25 @@ contract BaseAggregator {
         bytes calldata swapCallData,
         uint256 feeAmount,
         CanoeHelper.Warrant calldata warrant
-    ) external payable nonReentrant onlyApprovedTarget(target) onlyApprovedSigner(warrant.verifyingSigner) {
-
+    )
+        external
+        payable
+        nonReentrant
+        onlyApprovedTarget(target)
+        onlyApprovedSigner(warrant.verifyingSigner)
+    {
         // 0 - verify the canoe warrant
-        CanoeHelper.verifyWarrant(keccak256(abi.encode(buyTokenAddress, target, keccak256(swapCallData), feeAmount)), warrant);
+        CanoeHelper.verifyWarrant(
+            keccak256(
+                abi.encode(
+                    buyTokenAddress,
+                    target,
+                    keccak256(swapCallData),
+                    feeAmount
+                )
+            ),
+            warrant
+        );
 
         // 1 - Get the initial balances
         uint256 initialTokenBalance = IERC20(buyTokenAddress).balanceOf(
@@ -73,12 +87,15 @@ contract BaseAggregator {
         );
         uint256 initialEthAmount = address(this).balance - msg.value;
 
+        console.log("IEA: ", initialEthAmount);
+        console.log("msg.value: ", msg.value);
+
         // 2 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees
         // minus our fees, which are kept in this contract
-        (bool success, bytes memory res) = target.call{value: msg.value - feeAmount}(
-            swapCallData
-        );
+        (bool success, bytes memory res) = target.call{
+            value: msg.value - feeAmount
+        }(swapCallData);
 
         // Get the revert message of the call and revert with it if the call failed
         if (!success) {
@@ -87,6 +104,9 @@ contract BaseAggregator {
                 revert(add(32, res), returndata_size)
             }
         }
+        console.log("msg.value: ", msg.value);
+
+        console.log("SUCCESS", success);
 
         // 3 - Make sure we received the tokens
         {
@@ -130,7 +150,13 @@ contract BaseAggregator {
         uint256 sellAmount,
         uint256 feeAmount,
         CanoeHelper.Warrant calldata warrant
-    ) external payable nonReentrant onlyApprovedTarget(target) onlyApprovedSigner(warrant.verifyingSigner) {
+    )
+        external
+        payable
+        nonReentrant
+        onlyApprovedTarget(target)
+        onlyApprovedSigner(warrant.verifyingSigner)
+    {
         _fillQuoteTokenToToken(
             sellTokenAddress,
             buyTokenAddress,
@@ -160,7 +186,13 @@ contract BaseAggregator {
         uint256 feeAmount,
         PermitHelper.Permit calldata permitData,
         CanoeHelper.Warrant calldata warrant
-    ) external payable nonReentrant onlyApprovedTarget(target) onlyApprovedSigner(warrant.verifyingSigner)  {
+    )
+        external
+        payable
+        nonReentrant
+        onlyApprovedTarget(target)
+        onlyApprovedSigner(warrant.verifyingSigner)
+    {
         // 1 - Apply permit
         PermitHelper.permit(
             permitData,
@@ -194,7 +226,13 @@ contract BaseAggregator {
         uint256 sellAmount,
         uint256 feePercentageBasisPoints,
         CanoeHelper.Warrant calldata warrant
-    ) external payable nonReentrant onlyApprovedTarget(target) onlyApprovedSigner(warrant.verifyingSigner)  {
+    )
+        external
+        payable
+        nonReentrant
+        onlyApprovedTarget(target)
+        onlyApprovedSigner(warrant.verifyingSigner)
+    {
         _fillQuoteTokenToEth(
             sellTokenAddress,
             target,
@@ -221,7 +259,13 @@ contract BaseAggregator {
         uint256 feePercentageBasisPoints,
         PermitHelper.Permit calldata permitData,
         CanoeHelper.Warrant calldata warrant
-    ) external payable nonReentrant onlyApprovedTarget(target) onlyApprovedSigner(warrant.verifyingSigner)  {
+    )
+        external
+        payable
+        nonReentrant
+        onlyApprovedTarget(target)
+        onlyApprovedSigner(warrant.verifyingSigner)
+    {
         // 1 - Apply permit
         PermitHelper.permit(
             permitData,
@@ -253,13 +297,18 @@ contract BaseAggregator {
         CanoeHelper.Warrant calldata warrant
     ) internal {
         // 0 - verify the canoe warrant
-        CanoeHelper.verifyWarrant(keccak256(abi.encode(
-            sellTokenAddress,
-            target,
-            keccak256(swapCallData),
-            sellAmount,
-            feePercentageBasisPoints
-        )),warrant);
+        CanoeHelper.verifyWarrant(
+            keccak256(
+                abi.encode(
+                    sellTokenAddress,
+                    target,
+                    keccak256(swapCallData),
+                    sellAmount,
+                    feePercentageBasisPoints
+                )
+            ),
+            warrant
+        );
 
         // 1 - Get the initial ETH amount
         uint256 initialEthAmount = address(this).balance - msg.value;
@@ -280,12 +329,16 @@ contract BaseAggregator {
             target,
             sellAmount
         );
+        IERC20 WETH = IERC20(0x4200000000000000000000000000000000000006);
+        console.log("WETH HAD1: ", WETH.balanceOf(address(this)));
 
         // 4 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees.
         (bool success, bytes memory res) = target.call{value: msg.value}(
             swapCallData
         );
+
+        console.log("WETH HAD2: ", WETH.balanceOf(address(this)), success);
 
         // Get the revert message of the call and revert with it if the call failed
         if (!success) {
@@ -330,16 +383,20 @@ contract BaseAggregator {
         uint256 feeAmount,
         CanoeHelper.Warrant calldata warrant
     ) internal {
-
         // 0 - verify the canoe warrant
-        CanoeHelper.verifyWarrant(keccak256(abi.encode(
-            sellTokenAddress,
-            buyTokenAddress,
-            target,
-            keccak256(swapCallData),
-            sellAmount,
-            feeAmount
-        )), warrant);
+        CanoeHelper.verifyWarrant(
+            keccak256(
+                abi.encode(
+                    sellTokenAddress,
+                    buyTokenAddress,
+                    target,
+                    keccak256(swapCallData),
+                    sellAmount,
+                    feeAmount
+                )
+            ),
+            warrant
+        );
 
         // 1 - Get the initial output token balance
         uint256 initialOutputTokenAmount = IERC20(buyTokenAddress).balanceOf(

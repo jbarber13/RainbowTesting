@@ -6,8 +6,9 @@
     "esModuleInterop": true,
     "outDir": "dist",
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["mocha"]
   },
   "include": ["./scripts", "./test","./artifacts"],
-  "files": ["./hardhat.config.cts"]
+  "files": ["hardhat.config.ts"]
 }

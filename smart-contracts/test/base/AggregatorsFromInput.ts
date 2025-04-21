@@ -35,6 +35,7 @@ import {
   zeroAddress,
 } from "viem";
 import hre from "hardhat";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 const SELL_AMOUNT = "0.1";
 const TESTDATA_DIR = path.resolve(__dirname, "testdata/input");
@@ -51,12 +52,13 @@ describe("RainbowRouter Aggregators", function () {
       params: [
         {
           forking: {
-            blockNumber: 15214922,
-            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT,
+            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT!,
+            blockNumber: 15214922
           },
         },
       ],
-    });
+    })
+    console.log("RESET")
 
     const {
       signer,
