@@ -1,13 +1,10 @@
 import { RainbowRouter, RainbowRouter__factory } from "../../typechain-types";
 import { ERC20, IERC20 } from "../../typechain-types/contracts/interfaces/openzeppelin";
 import { network } from "hardhat";
-import { AbiCoder, BytesLike, Interface, Signer, TypedDataDomain, ZeroAddress } from "ethers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { AbiCoder, Interface, Signer, ZeroAddress } from "ethers";
 import { ERC20__factory, IERC20__factory } from "../../typechain-types/factories/contracts/interfaces/openzeppelin";
-import { generatePermitSignature, generateUniTxData, generateUniversalRouterTxData, PermitOutput, stealMoney } from "../../scripts/msc";
-import { sign } from "crypto";
+import { generatePermitSignature, generateUniTxData, stealMoney } from "../../scripts/msc";
 import { expect } from "chai";
-import { PermitDetails } from "@uniswap/permit2-sdk";
 const { ethers } = require("hardhat");
 
 describe("Permit Signature", () => {

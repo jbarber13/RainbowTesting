@@ -1,19 +1,40 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import { promises as fs } from "fs";
-import { signTypedData_v4, TypedDataUtils } from "eth-sig-util";
-import { addHexPrefix, toBuffer } from "ethereumjs-util";
+import {
+    ethers,
+    ZeroAddress // Ethers v6 ZeroAddress
+} from "ethers";
+import type {
+    Signer,
+    Provider,
+    Contract,
+    AddressLike,
+    BigNumberish,
+    BytesLike,
+    Signature,
+    TransactionResponse, // For type hinting deployment tx
+    Overrides, // For transaction overrides like gas price
+    ContractTransactionResponse // For type hinting contract write txs
+} from "ethers";
+
+// Import relevant TypeChain types (adjust paths as needed)
+import {
+    type IERC20,
+    type IWETH,
+    type IDAI,
+    type IERC20Metadata,
+    type IERC2612,
+    type IERC2612Extension, // Assuming this interface exists for _nonces
+    type RainbowRouter,
+    RainbowRouter__factory,
+    IDAI__factory,
+    IWETH__factory
+} from "../../typechain-types";
+
+// Keep your types, potentially update Address/Hex if needed, or use ethers types
 import { DomainParam, MessageParam, Quote } from "../types";
-import { Address, Hex, hexToNumber, parseSignature, toHex, zeroAddress } from "viem";
 
-import hre from "hardhat";
-
-function bigIntReplacer(key: string, value: any): any {
-  if (typeof value === "bigint") {
-    return value.toString() + 'n';
-  }
-  return value;
-}
-
+// --- Constants remain the same ---
 const debug = false;
 const showGasUsage = false;
 const MAINNET_ADDRESS_1INCH = "0x1111111254fb6c44bac0bed2854e76f90643097d";
@@ -35,6 +56,17 @@ const MIST_ADDRESS = "0x88acdd2a6425c3faae4bc9650fd7e27e0bebb7ab";
 const TRIBE_ADDRESS = "0xc7283b66eb1eb5fb86327f08e1b5816b0720212b";
 const FEI_ADDRESS = "0x956f47f50a910163d8bf957cf5846d573e7f87ca";
 
+// --- bigIntReplacer remains the same ---
+function bigIntReplacer(key: string, value: any): any {
+  if (typeof value === "bigint") {
+    // Keep standard serialization for ethers if needed, or use custom if required elsewhere
+    return value.toString(); // Standard toString() is often sufficient
+    // return value.toString() + 'n'; // Keep if your custom parsing needs the 'n'
+  }
+  return value;
+}
+
+// --- Logger remains the same ---
 const Logger = {
   info(...args: any[]) {
     // eslint-disable-next-line no-console
@@ -46,54 +78,85 @@ const Logger = {
   },
 };
 
+// --- Refactored Functions ---
+
+/**
+ * Gets the ERC20 balance of a vault/address.
+ * @param tokenAddress The address of the ERC20 token.
+ * @param vaultAddress The address of the vault/owner.
+ * @param provider An ethers Provider instance.
+ * @returns Promise<bigint> The balance.
+ */
 const getVaultBalanceForToken = async (
-  tokenAddress: Hex,
-  vaultAddress: Hex,
-) => {
-  const tokenContract = await hre.viem.getContractAt("IERC20", tokenAddress);
-  return tokenContract.read.balanceOf([vaultAddress]);
+  tokenAddress: AddressLike,
+  vaultAddress: AddressLike,
+  provider: Provider, // Accept provider directly
+): Promise<bigint> => {
+  // Use ethers.Contract for read-only calls with a provider
+  const tokenContract = new ethers.Contract(tokenAddress.toString(), [
+      // Minimal ABI for balanceOf
+      "function balanceOf(address owner) view returns (uint256)"
+    ], provider) as unknown as IERC20; // Cast to TypeChain type
+  return tokenContract.balanceOf(vaultAddress);
 };
 
+/**
+ * Initializes contracts, signer, and utility functions using Hardhat environment.
+ * This function NEEDS hre to access the Hardhat ethers plugin.
+ */
 const init = async () => {
-  const wethContract = await hre.viem.getContractAt("IWETH", WETH_ADDRESS);
-  const daiContract = await hre.viem.getContractAt("IDAI", DAI_ADDRESS);
+  // hre is necessary here to access the Hardhat ethers plugin features
+  const hre = await import("hardhat"); // Dynamically import hre if preferred
 
-  const signer = (await hre.viem.getWalletClients())[0];
-  Logger.log("User address", signer.account.address);
+  const [signer] = await hre.ethers.getSigners(); // Use ethers signers
+  const provider = hre.ethers.provider; // Get provider from Hardhat ethers
 
-  const rainbowRouterInstance = await hre.viem.deployContract("RainbowRouter", [], {
-    maxFeePerGas: 62722250707n
-  });
-  Logger.log("Contract address", rainbowRouterInstance.address);
+  Logger.log("User address", signer.address);
 
-  await rainbowRouterInstance.write.updateSwapTargets([
+  // Attach to existing contracts
+  const wethContract = IWETH__factory.connect(WETH_ADDRESS, signer);
+  const daiContract = IDAI__factory.connect(DAI_ADDRESS, signer);
+
+  // Deploy RainbowRouter using ethers v6
+  // Note: Pass constructor args if any, then overrides
+  const rainbowRouterInstance = await new RainbowRouter__factory(signer).deploy()
+  await rainbowRouterInstance.waitForDeployment(); // Wait for deployment confirmation
+  const instanceAddress = await rainbowRouterInstance.getAddress();
+  Logger.log("Contract address", instanceAddress);
+
+  // Perform write operations using connect(signer)
+  let tx: ContractTransactionResponse;
+  tx = await rainbowRouterInstance.connect(signer).updateSwapTargets(
     MAINNET_ADDRESS_1INCH,
     true,
-  ]);
-  await rainbowRouterInstance.write.updateSwapTargets([
+  );
+  await tx.wait(); // Wait for transaction confirmation
+
+  tx = await rainbowRouterInstance.connect(signer).updateSwapTargets(
     MAINNET_ADDRESS_0X,
     true,
-  ]);
+  );
+  await tx.wait();
 
-  await rainbowRouterInstance.write.updateValidSigner([zeroAddress, true]);
+  tx = await rainbowRouterInstance.connect(signer).updateValidSigner(ZeroAddress, true);
+  await tx.wait();
 
-  const publicClient = await hre.viem.getPublicClient();
-
-  const getEthVaultBalance = async () =>
-    publicClient.getBalance({ address: rainbowRouterInstance.address });
-  const getSignerBalance = async () =>
-    publicClient.getBalance({ address: signer.account.address });
+  // Utility functions using the provider instance
+  const getEthVaultBalance = async () => provider.getBalance(instanceAddress);
+  const getSignerBalance = async () => provider.getBalance(signer.address);
 
   return {
     getSignerBalance,
     daiContract,
     getEthVaultBalance,
     rainbowRouterInstance,
-    signer,
+    signer, // Return the ethers Signer
     wethContract,
-    publicClient,
+    provider, // Return the ethers Provider
   };
 };
+
+// --- EIP-712 and Permit Logic Refactoring ---
 
 const EIP712_DOMAIN_TYPE = [
   { name: "name", type: "string" },
@@ -102,180 +165,238 @@ const EIP712_DOMAIN_TYPE = [
   { name: "verifyingContract", type: "address" },
 ];
 
-const getDomainSeparator = async (
-  name: any,
-  version: string,
-  chainId: any,
-  verifyingContract: any,
-) => {
-  return (
-    "0x" +
-    TypedDataUtils.hashStruct(
-      "EIP712Domain",
-      { chainId, name, verifyingContract, version },
-      { EIP712Domain: EIP712_DOMAIN_TYPE },
-    ).toString("hex")
-  );
-};
-
-const getPermitVersion = async (
-  tokenAddress: Address,
-  name: any,
-  chainId: any,
-  verifyingContract: any,
-) => {
-  const token = await hre.viem.getContractAt("IERC2612", tokenAddress);
-  try {
-    const version = await token.read.version();
-    return version;
-  } catch (e) {
-    const version = "1";
-    try {
-      const domainSeparator = await token.read.DOMAIN_SEPARATOR();
-      const domainSeparatorValidation = await getDomainSeparator(
-        name,
-        version,
-        chainId,
-        verifyingContract,
-      );
-
-      if (domainSeparator === domainSeparatorValidation) {
-        return version;
-      }
-    } catch (_) {
-      if (
-        [TORN_ADDRESS, WNXM_ADDRESS, VSP_ADDRESS]
-          .map((t) => t.toLowerCase())
-          .indexOf(token.address.toLowerCase()) !== -1
-      ) {
-        return "1";
-      }
-      return null;
-    }
-    return null;
-  }
-};
-
-const getNonces = async (token: Address, owner: any) => {
-  const isDaiStylePermit = token.toLowerCase() === DAI_ADDRESS.toLowerCase();
-  try {
-  if (isDaiStylePermit) {
-    const tokenContract = await hre.viem.getContractAt("IDAI", token);
-    const nonce = await tokenContract.read.nonces([owner]);
-    return nonce;
-  } else {
-    const tokenContract = await hre.viem.getContractAt(
-      "IERC2612Extension",
-      token,
-    );
-    const nonce = await tokenContract.read._nonces([owner]);
-    return nonce;
-  }
-  } catch (e) {
-    return 0
-  }
-};
-
 const EIP712_DOMAIN_TYPE_NO_VERSION = [
   { name: "name", type: "string" },
   { name: "chainId", type: "uint256" },
   { name: "verifyingContract", type: "address" },
 ];
 
-const EIP2612_TYPE = [
-  { name: "owner", type: "address" },
-  { name: "spender", type: "address" },
-  { name: "value", type: "uint256" },
-  { name: "nonce", type: "uint256" },
-  { name: "deadline", type: "uint256" },
-];
+const EIP2612_TYPE = { // Use object for ethers v6 types
+    Permit: [
+        { name: "owner", type: "address" },
+        { name: "spender", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+    ]
+};
 
-const PERMIT_ALLOWED_TYPE = [
-  { name: "holder", type: "address" },
-  { name: "spender", type: "address" },
-  { name: "nonce", type: "uint256" },
-  { name: "expiry", type: "uint256" },
-  { name: "allowed", type: "bool" },
-];
+const PERMIT_ALLOWED_TYPE = { // Use object for ethers v6 types (DAI style)
+    Permit: [
+        { name: "holder", type: "address" },
+        { name: "spender", type: "address" },
+        { name: "nonce", type: "uint256" },
+        { name: "expiry", type: "uint256" },
+        { name: "allowed", type: "bool" },
+    ]
+};
 
+/**
+ * Tries to determine the EIP-2612 permit version ("1", "2", etc., or null).
+ * @param tokenAddress Address of the ERC20 token.
+ * @param provider Ethers Provider.
+ * @returns Promise<string | null> The version string or null.
+ */
+const getPermitVersion = async (
+  tokenAddress: AddressLike,
+  provider: Provider, // Accept provider
+): Promise<string | null> => {
+    const tokenContract = new ethers.Contract(tokenAddress.toString(), [
+        // Minimal ABI for version() and DOMAIN_SEPARATOR()
+        "function version() view returns (string)",
+        "function DOMAIN_SEPARATOR() view returns (bytes32)"
+    ], provider) as unknown as IERC2612; // Cast to a suitable TypeChain type
+
+    const name = await new ethers.Contract(tokenAddress.toString(), ["function name() view returns (string)"], provider).name();
+    const { chainId } = await provider.getNetwork();
+
+    try {
+        const version = await tokenContract.version();
+        // Basic check if version looks valid (e.g., not empty)
+        if (version && typeof version === 'string') {
+            return version;
+        }
+        // Fall through if version() reverts or returns non-string/empty
+    } catch (e) {
+        // version() might not exist or revert, try DOMAIN_SEPARATOR approach
+    }
+
+    // Try DOMAIN_SEPARATOR approach for version "1" guessing
+    const versionGuess = "1";
+    try {
+        const domainSeparator = await tokenContract.DOMAIN_SEPARATOR();
+
+        // Reconstruct the domain separator locally for version "1"
+        const domain: ethers.TypedDataDomain = {
+            name: name,
+            version: versionGuess,
+            chainId: chainId,
+            verifyingContract: await ethers.resolveAddress(tokenAddress, provider),
+        };
+        const reconstructedSeparator = ethers.TypedDataEncoder.hashDomain(domain);
+
+        if (domainSeparator === reconstructedSeparator) {
+            return versionGuess;
+        }
+    } catch (_) {
+        // DOMAIN_SEPARATOR() might not exist or revert
+        // Handle known edge cases without DOMAIN_SEPARATOR or version()
+        const lowerCaseAddress = (await ethers.resolveAddress(tokenAddress, provider)).toLowerCase();
+        if (
+            [TORN_ADDRESS, WNXM_ADDRESS, VSP_ADDRESS]
+                .map((t) => t.toLowerCase())
+                .includes(lowerCaseAddress)
+        ) {
+            return "1"; // Assume version 1 for these specific tokens
+        }
+        return null; // Cannot determine version
+    }
+
+    return null; // No version found
+};
+
+/**
+ * Gets the permit nonce for a token owner. Handles DAI-style and standard EIP-2612 nonces.
+ * @param tokenAddress Address of the ERC20 token.
+ * @param ownerAddress Address of the token owner.
+ * @param provider Ethers Provider.
+ * @returns Promise<bigint> The nonce.
+ */
+const getNonces = async (
+    tokenAddress: AddressLike,
+    ownerAddress: AddressLike,
+    provider: Provider, // Accept provider
+): Promise<bigint> => {
+    const resolvedTokenAddress = await ethers.resolveAddress(tokenAddress, provider);
+    const resolvedOwnerAddress = await ethers.resolveAddress(ownerAddress, provider);
+    const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
+
+    try {
+        if (isDaiStylePermit) {
+            const tokenContract = new ethers.Contract(resolvedTokenAddress, [
+                 // Minimal DAI ABI for nonces
+                "function nonces(address owner) view returns (uint256)"
+            ], provider) as unknown as IDAI;
+            return await tokenContract.nonces(resolvedOwnerAddress);
+        } else {
+            // Try standard EIP-2612 nonces() first
+            try {
+                 const tokenContractStd = new ethers.Contract(resolvedTokenAddress, [
+                    "function nonces(address owner) view returns (uint256)"
+                ], provider) as unknown as IERC2612;
+                 return await tokenContractStd.nonces(resolvedOwnerAddress);
+            } catch (e) {
+                // Fallback to _nonces() if nonces() doesn't exist (less common now)
+                 const tokenContractExt = new ethers.Contract(resolvedTokenAddress, [
+                    "function _nonces(address owner) view returns (uint256)" // Check your exact interface name
+                ], provider) as unknown as IERC2612Extension; // Use appropriate interface
+                 return await tokenContractExt._nonces(resolvedOwnerAddress);
+            }
+        }
+    } catch (e) {
+        // If nonces call fails for any reason, assume nonce is 0
+        Logger.log(`Could not fetch nonce for ${resolvedTokenAddress}, assuming 0:`, e);
+        return 0n;
+    }
+};
+
+/**
+ * Creates an EIP-2612 or DAI-style permit signature.
+ * @param signer The ethers Signer to sign the permit.
+ * @param tokenAddress Address of the token contract.
+ * @param spenderAddress Address of the spender being approved.
+ * @param value The amount to approve (for EIP-2612). Use ethers.MaxUint256 for max approval.
+ * @param deadline Unix timestamp deadline for the permit.
+ * @returns Promise<{ r: string; s: string; v: number; deadline: bigint; nonce: bigint; isDaiStylePermit: boolean }> The signature components and permit details.
+ */
 async function signPermit(
-  token: Address,
-  owner: Address,
-  spender: Address,
-  value: bigint,
-  deadline: bigint,
-  chainId: number,
+  signer: Signer, // Accept the signer directly
+  tokenAddress: AddressLike,
+  spenderAddress: AddressLike,
+  value: BigNumberish,
+  deadline: BigNumberish,
 ) {
-  const tokenContract = await hre.viem.getContractAt("IERC20Metadata", token);
+  const provider = signer.provider;
+  if (!provider) {
+      throw new Error("Signer must be connected to a provider.");
+  }
+  const resolvedTokenAddress = await ethers.resolveAddress(tokenAddress, provider);
+  const ownerAddress = await signer.getAddress();
+  const { chainId } = await provider.getNetwork();
 
-  const isDaiStylePermit = token.toLowerCase() === DAI_ADDRESS.toLowerCase();
+  const tokenContract = new ethers.Contract(resolvedTokenAddress, [
+       // Minimal ABI for name
+      "function name() view returns (string)"
+  ], provider) as unknown as IERC20Metadata;
 
-  const name = await tokenContract.read.name();
-  const [nonce, version] = await Promise.all([
-    getNonces(token, owner),
-    getPermitVersion(token as any, name, chainId, token),
+  const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
+
+  const [tokenName, version, nonce] = await Promise.all([
+    tokenContract.name(),
+    getPermitVersion(resolvedTokenAddress, provider),
+    getNonces(resolvedTokenAddress, ownerAddress, provider),
   ]);
 
-  const message: MessageParam = {
-    nonce: Number(nonce.toString()),
-    spender,
+  const domain: ethers.TypedDataDomain = {
+    name: tokenName,
+    chainId: chainId,
+    verifyingContract: resolvedTokenAddress,
   };
+  if (version) {
+    domain.version = version; // Add version if determined
+  }
+
+  let message: Record<string, any>;
+  let types: Record<string, ethers.TypedDataField[]>;
 
   if (isDaiStylePermit) {
-    message.holder = owner;
-    message.allowed = true;
-    message.expiry = Number(deadline.toString());
+    types = PERMIT_ALLOWED_TYPE;
+    message = {
+      holder: ownerAddress,
+      spender: spenderAddress,
+      nonce: nonce, // Use fetched nonce
+      expiry: deadline, // DAI uses 'expiry'
+      allowed: true, // DAI uses boolean 'allowed'
+    };
   } else {
-    message.value = toHex(value);
-    message.deadline = Number(deadline.toString());
-    message.owner = owner;
+    types = EIP2612_TYPE;
+    message = {
+      owner: ownerAddress,
+      spender: spenderAddress,
+      value: value, // EIP-2612 uses 'value'
+      nonce: nonce, // Use fetched nonce
+      deadline: deadline, // EIP-2612 uses 'deadline'
+    };
   }
 
-  const domain: DomainParam = {
-    chainId,
-    name,
-    verifyingContract: token,
-  };
-  if (version !== null) {
-    domain.version = version;
-  }
+  // Ensure numeric types are correctly formatted (ethers handles BigInt)
+  // Deadline and nonce should be BigInt or number
+  message.deadline = BigInt(message.deadline);
+  message.expiry = message.expiry ? BigInt(message.expiry) : undefined; // Handle undefined expiry for non-DAI
+  message.nonce = BigInt(nonce); // Ensure nonce is BigInt
 
-  const types = {
-    EIP712Domain:
-      version !== null ? EIP712_DOMAIN_TYPE : EIP712_DOMAIN_TYPE_NO_VERSION,
-    Permit: isDaiStylePermit ? PERMIT_ALLOWED_TYPE : EIP2612_TYPE,
-  };
 
-  const data = {
-    domain,
-    message,
-    primaryType: "Permit",
-    types,
-  };
+  // Sign the typed data using the provided signer
+  const signature = await signer.signTypedData(domain, types, message);
 
-  const privateKeyBuffer = toBuffer(
-    addHexPrefix(
-      "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    ),
-  );
+  // Parse the signature using ethers
+  const sig = ethers.Signature.from(signature);
 
-  const signature = signTypedData_v4(privateKeyBuffer, {
-    data: data as any,
-  }) as Hex;
-
-  const { r, s } = parseSignature(signature);
-  const v = hexToNumber(`0x${signature.slice(130)}`)
   return {
-    deadline,
+    r: sig.r,
+    s: sig.s,
+    v: sig.v, // v is already normalized by ethers
+    deadline: BigInt(deadline), // Return deadline as BigInt
+    nonce: nonce, // Return nonce as BigInt
     isDaiStylePermit,
-    nonce,
-    r,
-    s,
-    v: v,
-    value: value,
+    // value: BigInt(value), // Optionally return value if needed elsewhere
   };
 }
 
+
+/**
+ * Reads a JSON quote file.
+ */
 async function getQuoteFromFile(
   dir: string,
   source: string,
@@ -286,29 +407,31 @@ async function getQuoteFromFile(
   feePercentageBasisPoints: string,
 ): Promise<Quote> {
   const fileName = `${dir}/${source}-${tradeType}-${inputAsset}-${outputAsset}-${amount}-${feePercentageBasisPoints}.json`;
-
-  const data: any = await fs.readFile(fileName);
-  const quote: Quote = JSON.parse(data);
-
+  const data = await fs.readFile(fileName, 'utf-8'); // Specify encoding
+  // Need to parse BigInts correctly if using the 'n' suffix
+  const quote: Quote = JSON.parse(data, (key, value) => {
+        if (typeof value === 'string' && /^\d+n$/.test(value)) {
+            return BigInt(value.slice(0, -1));
+        }
+        return value;
+    });
   return quote;
 }
 
+
+// --- Exports ---
 export {
+  // Constants
   showGasUsage,
   BAL_ADDRESS,
   DAI_ADDRESS,
   ETH_ADDRESS,
   FEI_ADDRESS,
-  getQuoteFromFile,
-  getVaultBalanceForToken,
   INCH_ADDRESS,
-  init,
-  Logger,
   LQTY_ADDRESS,
   MIST_ADDRESS,
   OPIUM_ADDRESS,
   RAD_ADDRESS,
-  signPermit,
   TORN_ADDRESS,
   TRIBE_ADDRESS,
   ENS_ADDRESS,
@@ -318,5 +441,17 @@ export {
   WNXM_ADDRESS,
   MAINNET_ADDRESS_1INCH,
   MAINNET_ADDRESS_0X,
+  ZeroAddress, // Export ethers ZeroAddress
+
+  // Functions
+  getQuoteFromFile,
+  getVaultBalanceForToken,
+  init,
+  Logger,
+  signPermit,
+  getNonces, // Export if needed externally
+  getPermitVersion, // Export if needed externally
+
+  // Helpers
   bigIntReplacer,
 };

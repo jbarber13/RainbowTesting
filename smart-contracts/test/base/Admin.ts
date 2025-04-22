@@ -6,18 +6,32 @@
  */
 
 import { expect } from "chai";
-import { network } from "hardhat";
-import { init, MAINNET_ADDRESS_1INCH, WETH_ADDRESS } from "../utils";
+import { network, ethers } from "hardhat";
+import { init, MAINNET_ADDRESS_1INCH, WETH_ADDRESS } from "../utils"; // Assuming init is updated for ethers
 import hre from "hardhat";
-import { getAddress, getContract, zeroAddress } from "viem";
-type AsyncReturnType<T extends (..._args: any) => Promise<any>> = Awaited<ReturnType<T>>;
+import { ZeroAddress, type Signer } from "ethers"; // Import Signer type from ethers
+
+// Import TypeChain generated types
+// Adjust the path based on your TypeChain output directory
+import type { RainbowRouter, IWETH } from "../../typechain-types";
+
+// Define a placeholder type for the return value of your updated init function using TypeChain types
+type EthersInitReturnType = {
+  rainbowRouterInstance: RainbowRouter;
+  wethContract: IWETH;
+  deployer: Signer; // Assuming init might return the deployer signer
+  // Add other return values from init if necessary
+};
 
 describe("Admin", function () {
-  let instance: AsyncReturnType<typeof init>["rainbowRouterInstance"];
-  let weth: AsyncReturnType<typeof init>["wethContract"];
-  let publicClient: AsyncReturnType<typeof init>["publicClient"];
+  let instance: RainbowRouter;
+  let weth: IWETH;
+
+  let signers: Signer[];
+  let deployer: Signer;
 
   before(async () => {
+
     await network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -30,300 +44,378 @@ describe("Admin", function () {
       ],
     });
 
-    let { rainbowRouterInstance, wethContract, publicClient: pc } = await init();
+    // Assume init is updated to use ethers and returns TypeChain contract instances & potentially a signer
+    // It might look something like this internally:
+    // const [deployerSigner] = await hre.ethers.getSigners();
+    // const routerFactory = await hre.ethers.getContractFactory("RainbowRouter", deployerSigner);
+    // const rainbowRouterInstance = await routerFactory.attach("YOUR_ROUTER_ADDRESS") as RainbowRouter; // Or deploy if needed
+    // const wethFactory = await hre.ethers.getContractFactory("IWETH", deployerSigner);
+    // const wethContract = await wethFactory.attach(WETH_ADDRESS) as IWETH;
+    // return { rainbowRouterInstance, wethContract, deployer: deployerSigner };
+    let { rainbowRouterInstance, signer, wethContract, } = await init(); // Assuming init returns TypeChain types
     instance = rainbowRouterInstance;
     weth = wethContract;
-    publicClient = pc;
+    deployer = signer
+    // deployer = initDeployer; // Store deployer if returned by init
+
+    // Get signers using ethers
+    signers = await hre.ethers.getSigners();
   });
 
   it("Should be able to withdraw tokens", async function () {
     // 1 - Send some tokens to the contract
     const amount = 10000000n;
-    const accounts = await hre.viem.getWalletClients();
-    const receiver = accounts[2];
+    const [owner, , receiver] = signers; // Get owner and receiver signers
 
-    const depositTx = await weth.write.deposit({
-      value: amount,
-    });
-    await publicClient.waitForTransactionReceipt({hash: depositTx})
-    await weth.write.transfer([instance.address, amount]);
+    const instanceAddress = await instance.getAddress();
+    const wethAddress = await weth.getAddress();
+    const receiverAddress = await receiver.getAddress();
+
+    // Deposit WETH using the owner account
+    await weth.connect(owner).deposit({ value: amount });
+    // Transfer WETH to the router instance
+    await weth.connect(owner).transfer(instanceAddress, amount);
 
     // 2 - Check that the router contract is holding some tokens
-    const wethBalanceInContractBeforeWithdraw = await weth.read.balanceOf(
-      [instance.address],
-    );
-    expect(wethBalanceInContractBeforeWithdraw.toString()).to.equal(amount);
+    const wethBalanceInContractBeforeWithdraw = await weth.balanceOf(instanceAddress);
+    expect(wethBalanceInContractBeforeWithdraw).to.equal(amount);
 
-    // 3 - Withdraw the tokens
-    const withdrawTokenTx = instance.write.withdrawToken([weth.address, receiver.account.address, amount])
-    const withdrawTokenReceipt = await publicClient.waitForTransactionReceipt({hash: withdrawTokenTx})
+    // 3 - Withdraw the tokens (owner makes the call)
+    const withdrawTokenTx = instance.connect(owner).withdrawToken(
+      wethAddress,
+      receiverAddress,
+      amount
+    );
+
+    // 4 - Assert event emission
     await expect(withdrawTokenTx)
       .to.emit(instance, "TokenWithdrawn")
       .withArgs(
-        getAddress(weth.address),
-        getAddress(receiver.account.address),
-        amount,
+        // Custom predicate for the first address argument (wethAddress)
+        (emittedWethAddress: any) => {
+          // Basic type check and case-insensitive comparison
+          return typeof emittedWethAddress === 'string' &&
+            emittedWethAddress.toLowerCase() === wethAddress.toLowerCase();
+        },
+        // Custom predicate for the second address argument (receiverAddress)
+        (emittedReceiverAddress: any) => {
+          // Basic type check and case-insensitive comparison
+          return typeof emittedReceiverAddress === 'string' &&
+            emittedReceiverAddress.toLowerCase() === receiverAddress.toLowerCase();
+        },
+        // Direct comparison for the third argument (amount)
+        amount
       );
 
-    const wethBalanceInContractAfterWithdraw = await weth.read.balanceOf(
-      [instance.address]
-    );
-    const wethBalanceInReceiver = await weth.read.balanceOf([receiver.account.address]);
+    const wethBalanceInContractAfterWithdraw = await weth.balanceOf(instanceAddress);
+    const wethBalanceInReceiver = await weth.balanceOf(receiverAddress);
 
-    // 4 - Confirm the tokens were moved
-    expect(wethBalanceInContractAfterWithdraw.toString()).to.equal("0");
-    expect(wethBalanceInReceiver.toString()).to.equal(amount);
+    // 5 - Confirm the tokens were moved
+    expect(wethBalanceInContractAfterWithdraw).to.equal(0n);
+    expect(wethBalanceInReceiver).to.equal(amount);
   });
+
 
   it("Should revert if attempting to withdraw tokens when sender is not the owner", async function () {
     // 1 - Send some tokens to the contract
     const amount = 10000000n;
-    const accounts = await hre.viem.getWalletClients();
-    const receiver = accounts[2];
+    const [owner, nonOwner, receiver] = signers;
 
-    const depositTx = await weth.write.deposit({
-      value: amount,
-    });
-    await publicClient.waitForTransactionReceipt({hash: depositTx})
-    await weth.write.transfer([instance.address, amount]);
+    const instanceAddress = await instance.getAddress();
+    const wethAddress = await weth.getAddress();
+    const receiverAddress = await receiver.getAddress();
+
+    await weth.connect(owner).deposit({ value: amount });
+    await weth.connect(owner).transfer(instanceAddress, amount);
 
     // 2 - Check that the router contract is holding some tokens
-    const wethBalanceInContractBeforeWithdraw = await weth.read.balanceOf(
-      [instance.address],
-    );
-    expect(wethBalanceInContractBeforeWithdraw.toString()).to.equal(amount);
+    const wethBalanceInContractBeforeWithdraw = await weth.balanceOf(instanceAddress);
+    expect(wethBalanceInContractBeforeWithdraw).to.equal(amount);
 
-
-    // 3 - Withdraw the tokens
-    expect(
-      instance
-        .connect(accounts[2])
-        .withdrawToken(weth.address, receiver.address, amount),
-    ).to.be.revertedWith("ONLY_OWNER");
+    // 3 - Attempt to withdraw the tokens using a non-owner account
+    await expect(
+      instance.connect(nonOwner).withdrawToken(wethAddress, receiverAddress, amount)
+    ).to.be.revertedWith("ONLY_OWNER"); // Assuming OpenZeppelin's Ownable or similar
   });
 
   it("Should be able to withdraw ETH", async function () {
     // 1 - Send some ETH to the contract
-    const amount =10000000n;
-    const accounts = await hre.viem.getWalletClients();
-    const signer = accounts[0];
-    const receiver = accounts[2];
-    await signer.sendTransaction({ to: instance.address, value: amount });
+    const amount = 10000000n;
+    const [owner, , receiver] = signers;
+    const instanceAddress = await instance.getAddress();
+    const receiverAddress = await receiver.getAddress();
+
+    // Send ETH from owner to the contract instance
+    await owner.sendTransaction({ to: instanceAddress, value: amount });
 
     // 2 - Check that the router contract is holding some ETH
-    const startingEthBalanceInReceiver = await publicClient.getBalance({address: receiver.account.address});
-    const ethBalanceInContractBeforeWithdraw = await publicClient.getBalance({
-      address: instance.address,
-    });
-    expect(ethBalanceInContractBeforeWithdraw.toString()).to.equal(
-      amount.toString(),
-    );
+    const startingEthBalanceInReceiver = await hre.ethers.provider.getBalance(receiverAddress);
+    const ethBalanceInContractBeforeWithdraw = await hre.ethers.provider.getBalance(instanceAddress);
+    expect(ethBalanceInContractBeforeWithdraw).to.equal(amount);
 
     // 3 - Withdraw the ETH
-    await expect(instance.write.withdrawEth([receiver.address, amount]))
+    const withdrawEthTx = instance.connect(owner).withdrawEth(receiverAddress, amount);
+
+    // Assert event emission
+    await expect(withdrawEthTx)
       .to.emit(instance, "EthWithdrawn")
-      .withArgs(receiver.account.address, amount);
+      .withArgs(receiverAddress, amount);
 
-    const ethBalanceInContractAfterWithdraw = await publicClient.getBalance({
-      address: instance.address,
-    });
-    const ethBalanceInReceiver = await publicClient.getBalance({address: receiver.account.address});
+    const ethBalanceInContractAfterWithdraw = await hre.ethers.provider.getBalance(instanceAddress);
+    const ethBalanceInReceiver = await hre.ethers.provider.getBalance(receiverAddress);
 
-    // 4 - Confirm the tokens were moved
-    expect(ethBalanceInContractAfterWithdraw.toString()).to.equal("0");
+    // 4 - Confirm the ETH was moved
+    expect(ethBalanceInContractAfterWithdraw).to.equal(0n);
 
-    const finalReceiverExpectedBalance =
-      startingEthBalanceInReceiver+amount;
-    expect(ethBalanceInReceiver).to.equal(
-      finalReceiverExpectedBalance,
-    );
+    // Calculate expected balance (ignoring gas costs for the withdrawal tx itself)
+    const finalReceiverExpectedBalance = startingEthBalanceInReceiver + amount;
+    expect(ethBalanceInReceiver).to.equal(finalReceiverExpectedBalance);
   });
+
 
   it("Should revert if attempting to withdraw ETH when sender is not the owner", async function () {
     // 1 - Send some ETH to the contract
     const amount = 10000000n;
-    const accounts = await hre.viem.getWalletClients();
-    const signer = accounts[0];
-    const receiver = accounts[2];
-    await signer.sendTransaction({ to: instance.address, value: amount });
+    const [owner, nonOwner, receiver] = signers;
+    const instanceAddress = await instance.getAddress();
+    const receiverAddress = await receiver.getAddress();
+
+    await owner.sendTransaction({ to: instanceAddress, value: amount });
 
     // 2 - Check that the router contract is holding some ETH
-    const ethBalanceInContractBeforeWithdraw = await publicClient.getBalance(
-      {address: instance.address},
-    );
-    expect(ethBalanceInContractBeforeWithdraw.toString()).to.equal(
-      amount.toString(),
-    );
+    const ethBalanceInContractBeforeWithdraw = await hre.ethers.provider.getBalance(instanceAddress);
+    expect(ethBalanceInContractBeforeWithdraw).to.equal(amount);
 
-    // 3 - Withdraw the ETH
-    expect(
-      instance.connect(accounts[2]).withdrawEth(receiver.account.address, amount),
+    // 3 - Attempt to withdraw the ETH using a non-owner account
+    await expect(
+      instance.connect(nonOwner).withdrawEth(receiverAddress, amount)
     ).to.be.revertedWith("ONLY_OWNER");
   });
 
   it("Should be able to add swap targets", async function () {
-    await expect(instance.write.updateSwapTargets([MAINNET_ADDRESS_1INCH, true]))
+    const [owner] = signers;
+    const targetAddress = hre.ethers.getAddress(MAINNET_ADDRESS_1INCH); // Ensure checksum
+
+    const addTargetTx = instance.connect(owner).updateSwapTargets(targetAddress, true);
+
+    await expect(addTargetTx)
       .to.emit(instance, "SwapTargetAdded")
-      .withArgs(getAddress(MAINNET_ADDRESS_1INCH));
-    const exists = await instance.read.swapTargets([MAINNET_ADDRESS_1INCH]);
+      .withArgs(targetAddress);
+
+    const exists = await instance.swapTargets(targetAddress);
     expect(exists).to.equal(true);
   });
 
   it("Should be able to remove swap targets", async function () {
-    await expect(instance.write.updateSwapTargets([MAINNET_ADDRESS_1INCH, false]))
+    const [owner] = signers;
+    const targetAddress = hre.ethers.getAddress(MAINNET_ADDRESS_1INCH); // Ensure checksum
+
+    // Ensure the target exists first (add it if necessary, or assume previous test ran)
+    if (!(await instance.swapTargets(targetAddress))) {
+      await instance.connect(owner).updateSwapTargets(targetAddress, true);
+    }
+
+    const removeTargetTx = instance.connect(owner).updateSwapTargets(targetAddress, false);
+
+    await expect(removeTargetTx)
       .to.emit(instance, "SwapTargetRemoved")
-      .withArgs(getAddress(MAINNET_ADDRESS_1INCH));
-    const exists = await instance.read.swapTargets([MAINNET_ADDRESS_1INCH]);
+      .withArgs(targetAddress);
+
+    const exists = await instance.swapTargets(targetAddress);
     expect(exists).to.equal(false);
   });
 
+
   it("Should revert if attempting to add swap targets when sender is not the owner", async function () {
-    const accounts = await hre.viem.getWalletClients();
-    expect(
-      instance
-        .connect(accounts[2])
-        .updateSwapTargets(MAINNET_ADDRESS_1INCH, true),
+    const [, nonOwner] = signers;
+    const targetAddress = hre.ethers.getAddress(MAINNET_ADDRESS_1INCH);
+
+    await expect(
+      instance.connect(nonOwner).updateSwapTargets(targetAddress, true)
     ).to.be.revertedWith("ONLY_OWNER");
   });
 
   it("Should revert if attempting to remove swap targets when sender is not the owner", async function () {
-    const accounts = await hre.viem.getWalletClients();
-    expect(
-      instance
-        .connect(accounts[2])
-        .updateSwapTargets(MAINNET_ADDRESS_1INCH, false),
+    const [owner, nonOwner] = signers;
+    const targetAddress = hre.ethers.getAddress(MAINNET_ADDRESS_1INCH);
+
+    // Make sure target exists so removal attempt is valid logic (owner adds it first)
+    if (!(await instance.swapTargets(targetAddress))) {
+      await instance.connect(owner).updateSwapTargets(targetAddress, true);
+    }
+
+    await expect(
+      instance.connect(nonOwner).updateSwapTargets(targetAddress, false)
     ).to.be.revertedWith("ONLY_OWNER");
   });
 
   it("Should revert if attempting to transfer ownership to ZERO_ADDRESS", async function () {
-    expect(
-      instance.write.transferOwnership(zeroAddress),
-    ).to.be.revertedWith("ZERO_ADDRESS");
+    const [owner] = signers;
+    await expect(
+      instance.connect(owner).transferOwnership(hre.ethers.ZeroAddress)
+    ).to.be.revertedWith("ZERO_ADDRESS"); 
   });
 
   it("Should be able to transfer ownership", async function () {
-    const accounts = await hre.viem.getWalletClients();
-    const previousOwner = accounts[0].account.address;
-    const newOwnerAddress = accounts[1].account.address;
+    const [owner, newOwner] = signers;
+    const previousOwnerAddress = await owner.getAddress();
+    const newOwnerAddress = await newOwner.getAddress();
 
-    await expect(instance.write.transferOwnership(newOwnerAddress))
-      .to.emit(instance, "OwnerChanged")
-      .withArgs(newOwnerAddress, previousOwner);
+    const transferTx = instance.connect(owner).transferOwnership(newOwnerAddress);
+
+    await expect(transferTx)
+      .to.emit(instance, "OwnerChanged") // Standard OpenZeppelin event name
+      .withArgs(newOwnerAddress, previousOwnerAddress);
+    // OR .to.emit(instance, "OwnerChanged") // If your contract uses a custom event
+    // .withArgs(newOwnerAddress, previousOwnerAddress); // Check your event's argument order
 
     const currentOwner = await instance.owner();
     expect(currentOwner).to.equal(newOwnerAddress);
+
+    // IMPORTANT: Transfer ownership back for subsequent tests if they assume the deployer is the owner
+    await instance.connect(newOwner).transferOwnership(previousOwnerAddress);
+    const finalOwner = await instance.owner();
+    expect(finalOwner).to.equal(previousOwnerAddress); // Verify it's back
   });
 
   it("Should revert if attempting transferOwnership when sender is not the owner", async function () {
-    const accounts = await hre.viem.getWalletClients();
-    const newOwnerAddress = accounts[1].account.address;
-    expect(
-      instance.connect(accounts[2]).transferOwnership(newOwnerAddress),
-    ).to.be.revertedWith("ONLY_OWNER");
+    const [, newOwnerCandidate, nonOwner] = signers; // owner is signers[0] due to reset or transfer back
+    const newOwnerAddress = await newOwnerCandidate.getAddress();
+
+    await expect(
+      instance.connect(nonOwner).transferOwnership(newOwnerAddress)
+    ).to.be.revertedWith("ONLY_OWNER"); // Or "Ownable: caller is not the owner"
   });
 
   it('Should revert if an attacker attempts "Approval snatching" from a victim that previously approved an ERC20 token on RainbowRouter', async function () {
     const amount = 10000000n;
     const attackerSellAmount = 1n;
-    const accounts = await hre.viem.getWalletClients();
-    const victim = accounts[1];
-    const attacker = accounts[2];
+    const [, victim, attacker] = signers; // Get specific signers
+
+    const instanceAddress = await instance.getAddress();
+    const wethAddress = await weth.getAddress();
+    const victimAddress = await victim.getAddress();
+    const attackerAddress = await attacker.getAddress();
+
 
     // 1 - Get some WETH to the victim
-    await weth.connect(victim).deposit({
-      value: amount,
-    });
+    await weth.connect(victim).deposit({ value: amount });
 
     // 2 - Approve the Rainbow contract to transfer WETH from the victim's account
-    await weth.connect(victim).approve(instance.address, amount);
+    await weth.connect(victim).approve(instanceAddress, amount);
 
     // 3 - Get some WETH to the attacker
-    await weth.connect(attacker).deposit({
-      value: attackerSellAmount,
-    });
+    await weth.connect(attacker).deposit({ value: attackerSellAmount });
 
-    await getContract({
-      address: weth.address,
-      abi: weth.abi,
-      client: {
-        wallet: attacker,
-      }
-    }).write.approve([instance.address, attackerSellAmount]);
+    // 4 - Approve the Rainbow contract to transfer WETH from the attacker's account
+    await weth.connect(attacker).approve(instanceAddress, attackerSellAmount);
 
-    // WETH.transferFrom(victim, attacker, amount);
-    const malicousCalldata = weth.interface.encodeFunctionData("transferFrom", [
-      victim.account.address,
-      attacker.account.address,
+    // 5 - Encode malicious calldata using ethers Interface (available on TypeChain instance)
+    const maliciousCalldata = weth.interface.encodeFunctionData("transferFrom", [
+      victimAddress,
+      attackerAddress,
       amount,
     ]);
 
-    // 5 - Call swap aggregator with the malicious calldata
-    // to execute approval snatching attack
-    const hackTx = instance
-    .connect(attacker)
-    .fillQuoteTokenToEth(
-      WETH_ADDRESS,
-      WETH_ADDRESS,
-      malicousCalldata,
-      attackerSellAmount,
-      "0",
-      {
-        value: "0",
-      },
-    );
+    //placeholder warrant
+    const warrant = {
+      nonce: await attacker.getNonce(),
+      validBefore: (Math.floor(Date.now() / 1000)) + 5000,
+      validAfter: (Math.floor(Date.now() / 1000)) - 5000,
+      verifyingSigner: ZeroAddress,
+      signature: "0x"
+    }
 
-    expect(hackTx).to.be.revertedWith("TARGET_NOT_AUTH");
+    //validate zaddr as signer to bypass warrant for now
+    await instance.connect(deployer).updateValidSigner(ZeroAddress, true)
+
+    // 6 - Call swap aggregator with the malicious calldata
+    // Assume fillQuoteTokenToEth exists and takes these args
+    await expect(
+      instance.connect(attacker).fillQuoteTokenToEth(
+        wethAddress, // tokenToSell? - Assuming WETH
+        wethAddress, // target token address? Needs clarification based on function signature
+        maliciousCalldata, // The swap calldata to the target
+        attackerSellAmount, // amountToSell
+        0n, // minAmountOut
+        warrant,
+        { value: 0n } // msg.value if needed
+      )
+    ).to.be.revertedWith("TARGET_NOT_AUTH"); // Assuming this is the correct revert string
   });
 
-  it('Should revert if an attacker attempts "Approval snatching" trying to steal collected fees from RainbwoRouter', async function () {
-    const amount = "10000000";
-    const attackerSellAmount = "1";
-    const accounts = await hre.viem.getWalletClients();
-    const attacker = accounts[2];
+  // This test assumes the contract holds WETH from a previous failed withdrawal or requires setup
+  it('Should revert if an attacker attempts "Approval snatching" trying to steal collected fees from RainbowRouter', async function () {
+    const setupAmount = 10000000n; // Amount assumed to be in the contract
+    const attackerSellAmount = 1n;
+    const [owner, _, attacker] = signers; // Get owner and attacker
+
+    const instanceAddress = await instance.getAddress();
+    const wethAddress = await weth.getAddress();
+    const attackerAddress = await attacker.getAddress();
+
+    // Ensure the contract has WETH balance (e.g., deposit directly for test isolation)
+    await weth.connect(owner).deposit({ value: setupAmount });
+    await weth.connect(owner).transfer(instanceAddress, setupAmount);
 
     // 1 - Check that the router contract is holding some tokens
-    const wethBalanceInContract = await weth.balanceOf(instance.address);
-    expect(wethBalanceInContract.toString()).to.equal(amount.toString());
+    const wethBalanceInContract = await weth.balanceOf(instanceAddress);
+    expect(wethBalanceInContract).to.be.gt(0n); // Check it has *some* balance
 
     // 2 - Get some WETH to the attacker
-    await weth.connect(attacker).deposit({
-      value: attackerSellAmount,
-    });
+    await weth.connect(attacker).deposit({ value: attackerSellAmount });
 
-    // 4 - Approve the Rainbow contract to transfer WETH from the attacker's account
-    await weth.connect(attacker).approve(instance.address, attackerSellAmount);
+    // 3 - Approve the Rainbow contract to transfer WETH from the attacker's account
+    await weth.connect(attacker).approve(instanceAddress, attackerSellAmount);
 
-    // WETH.transferFrom(instance.address, attacker, amount);
-    const malicousCalldata = weth.interface.encodeFunctionData("transferFrom", [
-      instance.address,
-      attacker.address,
-      wethBalanceInContract,
+    // 4 - Encode malicious calldata to steal funds *from* the router contract
+    const maliciousCalldata = weth.interface.encodeFunctionData("transferFrom", [
+      instanceAddress,      // Steal FROM instance
+      attackerAddress,      // Send TO attacker
+      wethBalanceInContract, // Steal the entire balance
     ]);
 
-    // 5 - Call swap aggregator with the malicious calldata
-    // to execute approval snatching attack
-    const hackTx = instance
-    .connect(attacker)
-    .fillQuoteTokenToEth(
-      WETH_ADDRESS,
-      WETH_ADDRESS,
-      malicousCalldata,
-      attackerSellAmount,
-      "0",
-      {
-        value: "0",
-      },
-    );
+    //placeholder warrant
+    const warrant = {
+      nonce: await attacker.getNonce(),
+      validBefore: (Math.floor(Date.now() / 1000)) + 5000,
+      validAfter: (Math.floor(Date.now() / 1000)) - 5000,
+      verifyingSigner: ZeroAddress,
+      signature: "0x"
+    }
 
-    expect(hackTx).to.be.revertedWith("TARGET_NOT_AUTH");
+    // 5 - Call swap aggregator with the malicious calldata
+    await expect(
+      instance.connect(attacker).fillQuoteTokenToEth(
+        wethAddress,
+        wethAddress, // Adjust if needed
+        maliciousCalldata,
+        attackerSellAmount,
+        0n,
+        warrant,
+        { value: 0n }
+      )
+    ).to.be.revertedWith("TARGET_NOT_AUTH");
   });
 
+  // This test might fail if the contract has a receive() or fallback() payable function
+  // unless specifically designed to reject ETH from non-targets.
   it("Should revert if someone that is not an allowed swap target sends eth", async function () {
-    const accounts = await hre.viem.getWalletClients();
-    const sender = accounts[0];
-    const tx = sender.sendTransaction({
-      to: instance.address,
-    });
-    expect(tx).to.be.revertedWith("NO_RECEIVE");
+    const [, sender] = signers; // Use any signer (assuming they are not an allowed target)
+    const instanceAddress = await instance.getAddress();
+
+    // Check if the contract can actually receive ETH via fallback/receive
+    // If it's designed to *only* receive ETH via specific functions, this test is valid.
+    // If it has a general payable fallback, this test might need adjustment or may indicate
+    // a design flaw if the intent was to block direct sends.
+
+    // The revert reason "NO_RECEIVE" suggests a specific check, possibly in receive() or fallback()
+    await expect(
+      sender.sendTransaction({
+        to: instanceAddress,
+        value: ethers.parseEther("0.001"), // Send a small amount of ETH
+      })
+    ).to.be.revertedWith("NO_RECEIVE"); // Match the expected custom error
+    // OR ).to.be.reverted(); // If no specific reason is given / no fallback exists
   });
 });

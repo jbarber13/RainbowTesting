@@ -1,13 +1,9 @@
-import "@nomicfoundation/hardhat-ethers"; // Imports ethers plugin
-import "@nomicfoundation/hardhat-viem";
-import "@nomicfoundation/hardhat-toolbox"; // This includes TypeChain support
-//import "@nomicfoundation/hardhat-toolbox-viem";
+import "@nomicfoundation/hardhat-toolbox"; // Includes ethers, chai-matchers, typechain, verify, etc.
 import { HardhatUserConfig, task } from 'hardhat/config';
 import { config as dotEnvConfig } from "dotenv";
-//import { viem } from "hardhat"; // this will only work if plugin is loaded
+
 
 dotEnvConfig();
-
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
 /**
@@ -38,6 +34,7 @@ const zaddr =
 // Go to https://hardhat.org/config/ to learn more
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
+  /**
   etherscan: {
     apiKey: {
       mainnet: process.env.API_KEY!,
@@ -59,6 +56,7 @@ const config: HardhatUserConfig = {
       linea_mainnet: process.env.LINEA_API_KEY!
     },
   },
+   */
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     currency: 'USD',
