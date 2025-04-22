@@ -87,9 +87,6 @@ contract BaseAggregator {
         );
         uint256 initialEthAmount = address(this).balance - msg.value;
 
-        console.log("IEA: ", initialEthAmount);
-        console.log("msg.value: ", msg.value);
-
         // 2 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees
         // minus our fees, which are kept in this contract
@@ -104,9 +101,6 @@ contract BaseAggregator {
                 revert(add(32, res), returndata_size)
             }
         }
-        console.log("msg.value: ", msg.value);
-
-        console.log("SUCCESS", success);
 
         // 3 - Make sure we received the tokens
         {
@@ -329,16 +323,12 @@ contract BaseAggregator {
             target,
             sellAmount
         );
-        IERC20 WETH = IERC20(0x4200000000000000000000000000000000000006);
-        console.log("WETH HAD1: ", WETH.balanceOf(address(this)));
 
         // 4 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees.
         (bool success, bytes memory res) = target.call{value: msg.value}(
             swapCallData
         );
-
-        console.log("WETH HAD2: ", WETH.balanceOf(address(this)), success);
 
         // Get the revert message of the call and revert with it if the call failed
         if (!success) {
