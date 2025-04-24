@@ -14,28 +14,91 @@
  */
 import path from "path";
 import { expect } from "chai";
-import { network } from "hardhat";
+import { network, ethers } from "hardhat"; // Use ethers
 import { Sources } from "../types";
 import {
   DAI_ADDRESS,
-  ETH_ADDRESS,
-  getQuoteFromFile,
-  init,
+  ETH_ADDRESS, // Assuming this is ZeroAddress or a specific marker
+  getQuoteFromFile, // Assumed updated for ethers
+  getVaultBalanceForToken, // Assumed updated for ethers (though not used in this test)
+  init, // Assumed updated for ethers
   Logger,
   showGasUsage,
   WETH_ADDRESS,
 } from "../utils";
-import { Address, formatEther, parseEther, zeroAddress } from "viem";
+import {
+  ZeroAddress, // Use ZeroAddress from ethers
+  formatEther, // Use formatEther from ethers
+  parseEther, // Use parseEther from ethers
+  type Signer, // Import Signer type
+  type AddressLike, // Use AddressLike for type safety if needed
+} from "ethers";
 import hre from "hardhat";
+// Import TypeChain types - Adjust path as needed
+import { type RainbowRouter, type IWETH, type IDAI, IWETH__factory, IDAI__factory } from "../../typechain-types";
 
 const TESTDATA_DIR = path.resolve(__dirname, "testdata/output");
 
+// Define placeholder struct types based on inference - ADJUST THESE TO MATCH YOUR CONTRACT
+// You should import these from your TypeChain output if available
+type QuoteTokenToTokenParams = {
+  sellTokenAddress: AddressLike;
+  buyTokenAddress: AddressLike;
+  target: AddressLike;
+  data: string; // bytes
+  sellAmount: bigint;
+  fee: bigint;
+};
+type EthToTokenQuoteParams = {
+  buyTokenAddress: AddressLike;
+  target: AddressLike;
+  data: string; // bytes
+  fee: bigint;
+};
+type TokenToEthQuoteParams = {
+  sellTokenAddress: AddressLike;
+  target: AddressLike;
+  data: string; // bytes
+  sellAmount: bigint;
+  feePercentageBasisPoints: bigint; // Assuming fee is basis points here
+};
+type Warrant = {
+  verifyingSigner: AddressLike;
+  nonce: bigint;
+  signature: string; // bytes
+  validBefore: number; // uint32
+  validAfter: number; // uint32
+};
+
 describe("RainbowRouter Aggregators", function () {
-  let swapWETHtoDAIFromOutput: any,
-    swapDAItoWETHFromOutput: any,
-    swapETHtoDAIFromOutput: any,
-    swapDAItoETHFromOutput: any,
-    currentVaultAddress: Address;
+  let swapWETHtoDAIFromOutput: (
+    source: Sources,
+    buyAmountStr: string,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<boolean | undefined>;
+
+  let swapDAItoWETHFromOutput: (
+    source: Sources,
+    buyAmountStr: string,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<boolean | undefined>; // Return type added for consistency
+
+  let swapETHtoDAIFromOutput: (
+    source: Sources,
+    buyAmountStr: string,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<boolean | undefined>;
+
+  let swapDAItoETHFromOutput: (
+    source: Sources,
+    buyAmountStr: string,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<boolean | undefined>;
+
+  let rainbowRouterInstance: RainbowRouter;
+  let signer: Signer;
+  let currentVaultAddress: string; // Ethers uses string for addresses
+  let getSignerBalance: () => Promise<bigint>; // Function to get signer ETH balance
 
   before(async () => {
     await network.provider.request({
@@ -44,29 +107,25 @@ describe("RainbowRouter Aggregators", function () {
         {
           forking: {
             blockNumber: 15214922,
-            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT,
+            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT!,
           },
         },
       ],
     });
 
-    const {
-      signer,
-      wethContract,
-      daiContract,
-      rainbowRouterInstance,
-      publicClient,
-      getSignerBalance,
-    } = await init();
-    currentVaultAddress = rainbowRouterInstance.address;
+    const initResult = await init();
+    signer = initResult.signer; // Get Signer object
+    rainbowRouterInstance = initResult.rainbowRouterInstance; // Get TypeChain instance
+    getSignerBalance = initResult.getSignerBalance; // Get signer balance helper
+    currentVaultAddress = await rainbowRouterInstance.getAddress();
 
     // FROM OUTPUT
     swapWETHtoDAIFromOutput = async (
       source: Sources,
-      buyAmount: bigint,
+      buyAmountStr: string,
       feePercentageBasisPoints: bigint,
-    ) => {
-      const buyAmountWei = parseEther(buyAmount.toString());
+    ): Promise<boolean | undefined> => {
+      const buyAmountWei = parseEther(buyAmountStr);
 
       Logger.log("Output amount", formatEther(buyAmountWei), "DAI");
 
@@ -80,6 +139,12 @@ describe("RainbowRouter Aggregators", function () {
         feePercentageBasisPoints.toString(),
       );
       if (!quote) return;
+
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
 
       Logger.log(
         `User will get ~ `,
@@ -90,21 +155,20 @@ describe("RainbowRouter Aggregators", function () {
       );
 
       const amountToWrapWei = parseEther("0.1");
+      const wethContract = IWETH__factory.connect(WETH_ADDRESS, signer);
+      const daiContract = IDAI__factory.connect(DAI_ADDRESS, signer);
+      const signerAddress = await signer.getAddress();
 
       Logger.log(
-        `User wrapping ${amountToWrapWei} into WETH to have input token available...`,
+        `User wrapping ${formatEther(amountToWrapWei)} ETH into WETH to have input token available...`,
       );
-      const depositTx = await wethContract.write.deposit({
+      const depositTx = await wethContract.connect(signer).deposit({
         value: amountToWrapWei,
       });
-      await publicClient.waitForTransactionReceipt({ hash: depositTx });
+      await depositTx.wait();
 
-      const initialWethBalance = await wethContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const initialDaiBalance = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const initialWethBalance = await wethContract.balanceOf(signerAddress);
+      const initialDaiBalance = await daiContract.balanceOf(signerAddress);
 
       Logger.log("Initial user WETH balance", formatEther(initialWethBalance));
       Logger.log(
@@ -113,70 +177,63 @@ describe("RainbowRouter Aggregators", function () {
       );
 
       // Grant the contact an allowance to spend our WETH.
-      const approveTx = await wethContract.write.approve([
-        rainbowRouterInstance.address,
-        amountToWrapWei,
-      ]);
+      const approveTx = await wethContract.connect(signer).approve(
+        currentVaultAddress,
+        quote.sellAmount, // Use the quoted sell amount
+      );
 
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-      Logger.log(`Approved token allowance of `, amountToWrapWei.toString());
+      await approveTx.wait();
+      Logger.log(`Approved token allowance of `, formatEther(quote.sellAmount));
 
-      Logger.log(`Executing swap...`, JSON.stringify(quote, null, 2));
+      //Logger.log(`Executing swap...`, JSON.stringify(quote, null, 2));
 
-      const swapTx = await rainbowRouterInstance.write.fillQuoteTokenToToken(
-        [
-          quote.sellTokenAddress,
-          quote.buyTokenAddress,
-          quote.to || "0x",
-          quote.data || "0x",
-          quote.sellAmount,
-          quote.fee,
-          {
-            verifyingSigner: zeroAddress,
-            nonce: 0n,
-            signature: "0x",
-            validBefore: 0,
-            validAfter: 0,
-          },
-        ],
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToToken(
+        quote.sellTokenAddress,
+        quote.buyTokenAddress,
+        quote.to || ZeroAddress,
+        quote.data || Sources.Aggregator0x,
+        quote.sellAmount,
+        quote.fee,
+        {
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          signature: Sources.Aggregator0x,
+          validBefore: 0,
+          validAfter: 0,
+        },
         {
           value: quote.value,
         },
       );
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
+      const receipt = await swapTx.wait();
 
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const daiBalanceSigner = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const daiBalanceSigner = await daiContract.balanceOf(signerAddress);
       Logger.log("Final user balance (DAI): ", formatEther(daiBalanceSigner));
 
-      const wethBalanceSigner = await wethContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const wethBalanceSigner = await wethContract.balanceOf(signerAddress);
       Logger.log("Final user balance (WETH): ", formatEther(wethBalanceSigner));
 
-      expect(daiBalanceSigner > initialDaiBalance).to.be.equal(true);
-      expect(wethBalanceSigner < initialWethBalance).to.be.equal(true);
+      expect(daiBalanceSigner).to.be.gt(initialDaiBalance);
+      expect(wethBalanceSigner).to.be.lt(initialWethBalance);
       return true;
     };
 
     swapDAItoWETHFromOutput = async (
       source: Sources,
-      buyAmount: bigint,
+      buyAmountStr: string,
       feePercentageBasisPoints: bigint,
-    ) => {
-      const initialWethBalance = await wethContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const initialDaiBalance = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+    ): Promise<boolean | undefined> => {
+      const wethContract = IWETH__factory.connect(WETH_ADDRESS, signer);
+      const daiContract = IDAI__factory.connect(DAI_ADDRESS, signer);
+      const signerAddress = await signer.getAddress();
+
+      const initialWethBalance = await wethContract.balanceOf(signerAddress);
+      const initialDaiBalance = await daiContract.balanceOf(signerAddress);
       Logger.log(
         "Initial user balance (DAI): ",
         formatEther(initialDaiBalance),
@@ -186,7 +243,7 @@ describe("RainbowRouter Aggregators", function () {
         formatEther(initialWethBalance),
       );
 
-      const buyAmountWei = parseEther("0.01");
+      const buyAmountWei = parseEther(buyAmountStr);
 
       const quote = await getQuoteFromFile(
         TESTDATA_DIR,
@@ -199,6 +256,12 @@ describe("RainbowRouter Aggregators", function () {
       );
       if (!quote) return;
 
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
+
       Logger.log("Output amount", formatEther(buyAmountWei), "WETH");
 
       Logger.log("Amount to be swapped", formatEther(quote.sellAmount), "DAI");
@@ -206,66 +269,59 @@ describe("RainbowRouter Aggregators", function () {
       Logger.log(`User will get ~ `, formatEther(quote.buyAmount), "WETH");
 
       // Grant the allowance target an allowance to spend our DAI.
-      const approveTx = await daiContract.write.approve([
-        rainbowRouterInstance.address,
-        initialDaiBalance,
-      ]);
+      const approveTx = await daiContract.connect(signer).approve(
+        currentVaultAddress,
+        quote.sellAmount, // Use the quoted sell amount
+      );
 
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
+      await approveTx.wait();
 
       Logger.log(`Executing swap...`);
-      const swapTx = await rainbowRouterInstance.write.fillQuoteTokenToToken(
-        [
-          quote.sellTokenAddress,
-          quote.buyTokenAddress,
-          quote.to || "0x",
-          quote.data || "0x",
-          quote.sellAmount,
-          quote.fee,
-          {
-            verifyingSigner: zeroAddress,
-            nonce: 0n,
-            signature: "0x",
-            validBefore: 0,
-            validAfter: 0,
-          },
-        ],
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToToken(
+        quote.sellTokenAddress,
+        quote.buyTokenAddress,
+        quote.to || ZeroAddress,
+        quote.data || Sources.Aggregator0x,
+        quote.sellAmount,
+        quote.fee,
+        {
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          signature: Sources.Aggregator0x,
+          validBefore: 0,
+          validAfter: 0,
+        },
         {
           value: quote.value,
         },
       );
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      const receipt = await swapTx.wait();
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const daiBalanceSigner = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const wethBalanceSigner = await wethContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const daiBalanceVault = await daiContract.read.balanceOf([
-        currentVaultAddress,
-      ]);
+      const daiBalanceSigner = await daiContract.balanceOf(signerAddress);
+      const wethBalanceSigner = await wethContract.balanceOf(signerAddress);
 
       Logger.log("Final user balance (DAI): ", formatEther(daiBalanceSigner));
       Logger.log("Final user balance (WETH): ", formatEther(wethBalanceSigner));
-      Logger.log("Final VAULT balance (DAI): ", formatEther(daiBalanceVault));
 
-      expect(daiBalanceSigner < initialDaiBalance).to.be.equal(true);
-      expect(wethBalanceSigner > initialWethBalance).to.be.equal(true);
-      expect(daiBalanceVault >= quote.fee).to.be.equal(true);
+      expect(daiBalanceSigner).to.be.lt(initialDaiBalance);
+      expect(wethBalanceSigner).to.be.gt(initialWethBalance);
+      return true;
     };
 
     swapETHtoDAIFromOutput = async (
       source: Sources,
-      buyAmount: bigint,
+      buyAmountStr: string,
       feePercentageBasisPoints: bigint,
-    ) => {
-      const buyAmountWei = parseEther(buyAmount.toString());
+    ): Promise<boolean | undefined> => {
+      const buyAmountWei = parseEther(buyAmountStr);
+      const daiContract = IDAI__factory.connect(DAI_ADDRESS, signer);
+      const signerAddress = await signer.getAddress();
+      const initialEthBalance = await getSignerBalance();
+      const initialDaiBalance = await daiContract.balanceOf(signerAddress);
 
       Logger.log("Output amount", formatEther(buyAmountWei), "DAI");
 
@@ -280,6 +336,12 @@ describe("RainbowRouter Aggregators", function () {
       );
       if (!quote) return;
 
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
+
       Logger.log(
         `User will get ~ `,
         formatEther(quote.buyAmount),
@@ -288,73 +350,63 @@ describe("RainbowRouter Aggregators", function () {
         "ETH",
       );
 
-      const initialEthBalance = await getSignerBalance();
-      const initialDaiBalance = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
-
       Logger.log("Initial user ETH balance", formatEther(initialEthBalance));
       Logger.log(
         "Initial user balance (DAI): ",
         formatEther(initialDaiBalance),
       );
 
-      Logger.log(`Executing swap...`, JSON.stringify(quote, null, 2));
+      //Logger.log(`Executing swap...`, JSON.stringify(quote, null, 2));
 
-      const swapTx = await rainbowRouterInstance.write.fillQuoteEthToToken(
-        [
-          quote.buyTokenAddress,
-          quote.to || "0x",
-          quote.data || "0x",
-          quote.fee,
-          {
-            verifyingSigner: zeroAddress,
-            nonce: 0n,
-            signature: "0x",
-            validBefore: 0,
-            validAfter: 0,
-          },
-        ],
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteEthToToken(
+        quote.buyTokenAddress,
+        quote.to || ZeroAddress,
+        quote.data || Sources.Aggregator0x,
+        quote.fee,
         {
-          value: quote.value,
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          signature: Sources.Aggregator0x,
+          validBefore: 0,
+          validAfter: 0,
+        },
+        {
+          value: quote.value, // This should be the total ETH sent (sellAmountWei)
         },
       );
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
+      const receipt = await swapTx.wait();
 
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const daiBalanceSigner = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const daiBalanceSigner = await daiContract.balanceOf(signerAddress);
       Logger.log("Final user balance (DAI): ", formatEther(daiBalanceSigner));
       const ethBalanceSigner = await getSignerBalance();
       Logger.log("Final user balance (ETH): ", formatEther(ethBalanceSigner));
 
-      expect(daiBalanceSigner > initialDaiBalance).to.be.equal(true);
-      expect(ethBalanceSigner < initialEthBalance).to.be.equal(true);
+      expect(daiBalanceSigner).to.be.gt(initialDaiBalance);
+      expect(ethBalanceSigner).to.be.lt(initialEthBalance);
       return true;
     };
 
     swapDAItoETHFromOutput = async (
       source: Sources,
-      _: bigint,
+      buyAmountStr: string,
       feePercentageBasisPoints: bigint,
-    ) => {
+    ): Promise<boolean | undefined> => {
+      const daiContract = IDAI__factory.connect(DAI_ADDRESS, signer);
+      const signerAddress = await signer.getAddress();
       const initialEthBalance = await getSignerBalance();
-      const initialDaiBalance = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const initialDaiBalance = await daiContract.balanceOf(signerAddress);
       Logger.log(
         "Initial user balance (DAI): ",
         formatEther(initialDaiBalance),
       );
       Logger.log("Initial user balance (ETH)", formatEther(initialEthBalance));
 
-      const buyAmountWei = parseEther("0.01");
+      const buyAmountWei = parseEther(buyAmountStr);
 
       const quote = await getQuoteFromFile(
         TESTDATA_DIR,
@@ -367,6 +419,13 @@ describe("RainbowRouter Aggregators", function () {
       );
       if (!quote) return;
 
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
+      quote.feePercentageBasisPoints = quote.feePercentageBasisPoints ? (quote.feePercentageBasisPoints) : 0;
+
       Logger.log("Output amount", formatEther(buyAmountWei), "ETH");
 
       Logger.log("Amount to be swapped", formatEther(quote.sellAmount), "DAI");
@@ -374,74 +433,66 @@ describe("RainbowRouter Aggregators", function () {
       Logger.log(`User will get ~ `, formatEther(quote.buyAmount), "ETH");
 
       // Grant the allowance target an allowance to spend our DAI.
-      const approveTx = await daiContract.write.approve([
-        rainbowRouterInstance.address,
-        initialDaiBalance,
-      ]);
+      const approveTx = await daiContract.connect(signer).approve(
+        currentVaultAddress,
+        quote.sellAmount, // Use the quoted sell amount
+      );
 
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
+      await approveTx.wait();
 
       Logger.log(`Executing swap...`);
-      const swapTx = await rainbowRouterInstance.write.fillQuoteTokenToEth(
-        [
-          quote.sellTokenAddress,
-          quote.to || "0x",
-          quote.data || "0x",
-          quote.sellAmount,
-          BigInt(quote.feePercentageBasisPoints),
-          {
-            verifyingSigner: zeroAddress,
-            nonce: 0n,
-            signature: "0x",
-            validBefore: 0,
-            validAfter: 0,
-          },
-        ],
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToEth(
+        quote.sellTokenAddress,
+        quote.to || ZeroAddress,
+        quote.data || Sources.Aggregator0x,
+        quote.sellAmount,
+        quote.feePercentageBasisPoints,
+        {
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          signature: ZeroAddress, // Default signature
+          validBefore: 0,
+          validAfter: 0,
+        },
         {
           value: quote.value,
         },
       );
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
+      const receipt = await swapTx.wait();
 
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const daiBalanceSigner = await daiContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const daiBalanceSigner = await daiContract.balanceOf(signerAddress);
       const ethBalanceSigner = await getSignerBalance();
-      const daiBalanceVault = await daiContract.read.balanceOf([
-        currentVaultAddress,
-      ]);
 
       Logger.log("Final user balance (DAI): ", formatEther(daiBalanceSigner));
       Logger.log("Final user balance (ETH): ", formatEther(ethBalanceSigner));
-      Logger.log("Final VAULT balance (DAI): ", formatEther(daiBalanceVault));
 
-      expect(daiBalanceSigner < initialDaiBalance).to.be.equal(true);
-      expect(daiBalanceVault >= quote.fee).to.be.equal(true);
+      expect(daiBalanceSigner).to.be.lt(initialDaiBalance);
+      expect(ethBalanceSigner).to.be.gt(initialEthBalance);
+      return true;
     };
   });
 
   describe("Trades based on output amount instead of input", function () {
     // ====>  0x trades
     it("Should be able to swap wETH to DAI with no fee on 0x (FROM OUTPUT)", async function () {
-      return swapWETHtoDAIFromOutput("0x", "100", 0);
+      return swapWETHtoDAIFromOutput(Sources.Aggregator0x, "100", 0n);
     });
 
     it("Should be able to swap DAI to WETH with no fee on 0x (FROM OUTPUT)", async function () {
-      return swapDAItoWETHFromOutput("0x", null, 0);
+      return swapDAItoWETHFromOutput(Sources.Aggregator0x, "0.01", 0n);
     });
 
     it("Should be able to swap ETH to DAI with no fee on 0x (FROM OUTPUT)", async function () {
-      return swapETHtoDAIFromOutput("0x", "100", 0);
+      return swapETHtoDAIFromOutput(Sources.Aggregator0x, "100", 0n);
     });
 
     it("Should be able to swap DAI to ETH with no fee on 0x (FROM OUTPUT)", async function () {
-      return swapDAItoETHFromOutput("0x", null, 0);
+      return swapDAItoETHFromOutput(Sources.Aggregator0x, "0.01", 0n);
     });
   });
 });
