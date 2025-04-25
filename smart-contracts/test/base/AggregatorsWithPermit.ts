@@ -16,47 +16,75 @@
 
 import path from "path";
 import { expect } from "chai";
-import { network } from "hardhat";
+import { network, ethers } from "hardhat"; // Use ethers
 
 import { Sources } from "../types";
 import {
   BAL_ADDRESS,
   DAI_ADDRESS,
   ENS_ADDRESS,
-  ETH_ADDRESS,
+  ETH_ADDRESS, // Assuming this is ZeroAddress or a specific marker
   FEI_ADDRESS,
-  getQuoteFromFile,
+  getQuoteFromFile, // Assumed updated for ethers
   INCH_ADDRESS,
-  init,
+  init, // Assumed updated for ethers
   Logger,
   LQTY_ADDRESS,
   MIST_ADDRESS,
   OPIUM_ADDRESS,
   RAD_ADDRESS,
   showGasUsage,
-  signPermit,
+  signPermit, // Assumed updated or compatible with ethers
   TORN_ADDRESS,
   TRIBE_ADDRESS,
   USDC_ADDRESS,
   VSP_ADDRESS,
   WNXM_ADDRESS,
   bigIntReplacer,
+  PermitData,
+  WarrantData,
 } from "../utils";
 
 import hre from "hardhat";
 import {
-  Address,
-  formatEther,
-  formatUnits,
-  maxUint256,
-  parseEther,
-  zeroAddress,
-} from "viem";
+  ZeroAddress, // Use ZeroAddress from ethers
+  formatEther, // Use formatEther from ethers
+  formatUnits, // Use formatUnits from ethers
+  parseEther, // Use parseEther from ethers
+  MaxUint256, // Use MaxUint256 from ethers
+  type Signer, // Import Signer type
+  type AddressLike, // Use AddressLike for type safety if needed
+} from "ethers";
+// Import TypeChain types - Adjust path as needed
+import { type RainbowRouter, type IERC20Metadata, type IERC2612Extension, IERC20Metadata__factory, IERC2612Extension__factory } from "../../typechain-types";
+
 const SELL_AMOUNT = "0.1";
 const TESTDATA_DIR = path.resolve(__dirname, "testdata/inputpermit");
 
 describe("RainbowRouter Aggregators", function () {
-  let swapETHtoToken: any, swapTokentoETH: any, swapTokentoToken: any;
+  let swapETHtoToken: (
+    source: Sources,
+    tokenAddress: AddressLike,
+    sellAmountStr: string,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<void>;
+
+  let swapTokentoETH: (
+    source: Sources,
+    tokenAddress: AddressLike,
+    feePercentageBasisPoints: bigint,
+    usePermit?: boolean,
+  ) => Promise<void>;
+
+  let swapTokentoToken: (
+    source: Sources,
+    tokenAddress: AddressLike,
+    buyTokenAddress: AddressLike,
+    feePercentageBasisPoints: bigint,
+  ) => Promise<void>;
+
+  let rainbowRouterInstance: RainbowRouter;
+  let signer: Signer;
 
   before(async () => {
     await network.provider.request({
@@ -65,52 +93,55 @@ describe("RainbowRouter Aggregators", function () {
         {
           forking: {
             blockNumber: 15214922,
-            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT,
+            jsonRpcUrl: process.env.MAINNET_RPC_ENDPOINT!,
           },
         },
       ],
     });
 
-    const { signer, rainbowRouterInstance, publicClient, getSignerBalance } =
-      await init();
+    const initResult = await init();
+    signer = initResult.signer; // Get Signer object
+    rainbowRouterInstance = initResult.rainbowRouterInstance; // Get TypeChain instance
+    // const publicClient = initResult.publicClient; // No longer needed
+    // const getSignerBalance = initResult.getSignerBalance; // Assuming this is still available
 
     swapETHtoToken = async (
       source: Sources,
-      tokenAddress: Address,
-      sellAmount: string,
+      tokenAddress: AddressLike,
+      sellAmountStr: string,
       feePercentageBasisPoints: bigint,
-    ) => {
-      const tokenContract = await hre.viem.getContractAt(
-        "IERC20Metadata",
-        tokenAddress,
-      );
+    ): Promise<void> => {
+      const tokenContract = IERC20Metadata__factory.connect(tokenAddress.toString(), signer);
 
-      const initialEthBalance = await publicClient.getBalance({
-        address: signer.account.address,
-      });
-      const initialTokenBalance = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const tokenSymbol = await tokenContract.read.symbol();
-      const tokenDecimals = await tokenContract.read.decimals();
+      const initialEthBalance = await ethers.provider.getBalance(await signer.getAddress());
+      const initialTokenBalance = await tokenContract.balanceOf(await signer.getAddress());
+      const tokenSymbol = await tokenContract.symbol();
+      const tokenDecimals = await tokenContract.decimals();
       Logger.log("Initial user balance (ETH)", formatEther(initialEthBalance));
       Logger.log(
         `Initial user balance (${tokenSymbol}): `,
         formatUnits(initialTokenBalance, tokenDecimals),
       );
 
-      const sellAmountWei = parseEther(sellAmount.toString());
+      const sellAmountWei = parseEther(sellAmountStr);
 
       const quote = await getQuoteFromFile(
         TESTDATA_DIR,
         source,
         "input",
         ETH_ADDRESS,
-        tokenContract.address,
+        tokenAddress.toString(),
         sellAmountWei.toString(),
         feePercentageBasisPoints.toString(),
       );
       if (!quote) return;
+
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
+      quote.sellAmountMinusFees = BigInt(quote.sellAmountMinusFees || quote.sellAmount - quote.fee);
 
       Logger.log("Input amount", formatEther(sellAmountWei), "ETH");
       Logger.log("Fee", formatEther(quote.fee), "ETH");
@@ -127,65 +158,52 @@ describe("RainbowRouter Aggregators", function () {
 
       Logger.log(`Executing swap... with `, formatEther(sellAmountWei));
 
-      const swapTx = await rainbowRouterInstance.write.fillQuoteEthToToken(
-        [
-          quote.buyTokenAddress,
-          quote.to || "0x",
-          quote.data || "0x",
-          quote.fee,
-          {
-            verifyingSigner: zeroAddress,
-            nonce: 0n,
-            validBefore: 0,
-            validAfter: 0,
-            signature: "0x",
-          },
-        ],
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteEthToToken(
+        quote.buyTokenAddress,
+        quote.to || ZeroAddress,
+        quote.data || Sources.Aggregator0x,
+        quote.fee,
+        {
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          validBefore: 0,
+          validAfter: 0,
+          signature: "0x",
+        },
         {
           value: quote.value,
         },
       );
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      const receipt = await swapTx.wait();
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const tokenBalanceSigner = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const ethBalanceSigner = await publicClient.getBalance({
-        address: signer.account.address,
-      });
+      const tokenBalanceSigner = await tokenContract.balanceOf(await signer.getAddress());
+      const ethBalanceSigner = await ethers.provider.getBalance(await signer.getAddress());
       Logger.log(
         `Final user balance (${tokenSymbol}): `,
         formatUnits(tokenBalanceSigner, tokenDecimals),
       );
       Logger.log("Final user balance (ETH): ", formatEther(ethBalanceSigner));
 
-      expect(tokenBalanceSigner > initialTokenBalance).to.be.equal(true);
-      expect(ethBalanceSigner < initialEthBalance).to.be.equal(true);
+      expect(tokenBalanceSigner).to.be.gt(initialTokenBalance);
+      expect(ethBalanceSigner).to.be.lt(initialEthBalance);
     };
 
     swapTokentoETH = async (
       source: Sources,
-      tokenAddress: Address,
+      tokenAddress: AddressLike,
       feePercentageBasisPoints: bigint,
       usePermit = true,
-    ) => {
-      const tokenContract = await hre.viem.getContractAt(
-        "IERC2612Extension",
-        tokenAddress,
-      );
-      const initialEthBalance = await publicClient.getBalance({
-        address: signer.account.address,
-      });
-      const initialTokenBalance = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const tokenSymbol = await tokenContract.read.symbol();
-      const tokenDecimals = await tokenContract.read.decimals();
+    ): Promise<void> => {
+      const tokenContract = IERC2612Extension__factory.connect(tokenAddress.toString(), signer);
+      const signerAddress = await signer.getAddress();
+      const initialTokenBalance = await tokenContract.balanceOf(signerAddress);
+      const initialEthBalance = await ethers.provider.getBalance(await signer.getAddress())
+      const tokenSymbol = await tokenContract.symbol();
+      const tokenDecimals = await tokenContract.decimals();
 
       Logger.log(
         `Initial user balance (${tokenSymbol}): `,
@@ -199,12 +217,19 @@ describe("RainbowRouter Aggregators", function () {
         TESTDATA_DIR,
         source,
         "input",
-        tokenContract.address,
+        tokenAddress.toString(),
         ETH_ADDRESS,
         sellAmountWei.toString(),
         feePercentageBasisPoints.toString(),
       );
       if (!quote) return;
+
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
+      quote.feePercentageBasisPoints = quote.feePercentageBasisPoints ? (quote.feePercentageBasisPoints) : 0;
 
       Logger.log(
         "Input amount",
@@ -223,79 +248,68 @@ describe("RainbowRouter Aggregators", function () {
 
       let swapTx;
       if (usePermit) {
-        let { timestamp } = await publicClient.getBlock();
-        await hre.network.provider.send("evm_setNextBlockTimestamp", [
-          Number(++timestamp),
-        ]);
-        const deadline = timestamp + 3600n;
-        const permitSignature = await signPermit(
-          tokenContract.address,
-          signer.account.address,
-          rainbowRouterInstance.address,
-          maxUint256,
+        const latestBlock = await ethers.provider.getBlock('latest');
+        const currentTimestamp = latestBlock ? BigInt(latestBlock.timestamp) : BigInt(Math.floor(Date.now() / 1000)); // Fallback to current time if no block
+        
+        const deadline = currentTimestamp + 3600n; // Deadline 1 hour (3600 seconds) in the future
+
+
+        const permitSignature: PermitData = await signPermit(
+          signer,
+          await tokenContract.getAddress(),
+          await rainbowRouterInstance.getAddress(),
+          MaxUint256,
           deadline,
-          1,
         );
 
-        Logger.log(
-          "PERMIT SIGNATURE",
-          JSON.stringify(permitSignature, bigIntReplacer, 2),
-        );
+        const warrant: WarrantData = {
+          verifyingSigner: ZeroAddress,
+          nonce: 0n,
+          signature: Sources.Aggregator0x,
+          validBefore: 0n,
+          validAfter: 0n,
+        }
 
-        Logger.log(`Executing swap...`);
-        swapTx =
-          await rainbowRouterInstance.write.fillQuoteTokenToEthWithPermit(
-            [
-              quote.sellTokenAddress,
-              quote.to || "0x",
-              quote.data || "0x",
-              quote.sellAmount,
-              BigInt(quote.feePercentageBasisPoints),
-              permitSignature,
-              {
-                verifyingSigner: zeroAddress,
-                nonce: 0n,
-                validBefore: 0,
-                validAfter: 0,
-                signature: "0x",
-              },
-            ],
-            {
-              value: quote.value,
-            },
-          );
+        swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToEthWithPermit(
+          quote.sellTokenAddress,
+          quote.to || ZeroAddress,
+          quote.data || Sources.Aggregator0x, // Provide a default value
+          quote.sellAmount,
+          quote.feePercentageBasisPoints,
+          permitSignature,
+          warrant,
+          {
+            value: quote.value,
+          },
+        )
       } else {
-        swapTx = await rainbowRouterInstance.write.fillQuoteTokenToEth(
-          [
-            quote.sellTokenAddress,
-            quote.to || "0x",
-            quote.data || "0x",
-            quote.sellAmount,
-            BigInt(quote.feePercentageBasisPoints),
-            {
-              verifyingSigner: zeroAddress,
-              nonce: 0n,
-              validBefore: 0,
-              validAfter: 0,
-              signature: "0x",
-            },
-          ],
+        Logger.log(`Executing swap...`);
+        swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToEth(
+          quote.sellTokenAddress,
+          quote.to || ZeroAddress,
+          quote.data || Sources.Aggregator0x,
+          quote.sellAmount,
+          quote.feePercentageBasisPoints,
+          {
+            verifyingSigner: ZeroAddress,
+            nonce: 0n,
+            validBefore: 0,
+            validAfter: 0,
+            signature: "0x",
+          },
           {
             value: quote.value,
           },
         );
       }
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      const receipt = await swapTx.wait();
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
 
-      const tokenBalanceSigner = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const ethBalanceSigner = await getSignerBalance();
+      const tokenBalanceSigner = await tokenContract.balanceOf(signerAddress);
+      const ethBalanceSigner = await ethers.provider.getBalance(await signer.getAddress());
 
       Logger.log(
         `Final user balance (${tokenSymbol}): `,
@@ -303,35 +317,25 @@ describe("RainbowRouter Aggregators", function () {
       );
       Logger.log("Final user balance (ETH): ", formatEther(ethBalanceSigner));
       expect(tokenBalanceSigner).to.be.equal(0n);
-      expect(ethBalanceSigner > initialEthBalance).to.be.equal(true);
+      expect(ethBalanceSigner).to.be.gt(initialEthBalance);
     };
 
     swapTokentoToken = async (
       source: Sources,
-      tokenAddress: Address,
-      buyTokenAddress: Address,
+      tokenAddress: AddressLike,
+      buyTokenAddress: AddressLike,
       feePercentageBasisPoints: bigint,
-    ) => {
-      const tokenContract = await hre.viem.getContractAt(
-        "IERC2612Extension",
-        tokenAddress,
-      );
+    ): Promise<void> => {
+      const tokenContract = IERC2612Extension__factory.connect(tokenAddress.toString(), signer);
+      const buyTokenContract = IERC2612Extension__factory.connect(buyTokenAddress.toString(), signer);
+      const signerAddress = await signer.getAddress();
+      const initialBuyTokenBalance = await buyTokenContract.balanceOf(signerAddress);
+      const initialTokenBalance = await tokenContract.balanceOf(signerAddress);
+      const tokenSymbol = await tokenContract.symbol();
+      const tokenDecimals = await tokenContract.decimals();
 
-      const buyTokenContract = await hre.viem.getContractAt(
-        "IERC2612Extension",
-        buyTokenAddress,
-      );
-      const initialBuyTokenBalance = await buyTokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const initialTokenBalance = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const tokenSymbol = await tokenContract.read.symbol();
-      const tokenDecimals = await tokenContract.read.decimals();
-
-      const buyTokenSymbol = await buyTokenContract.read.symbol();
-      const buyTokenDecimals = await buyTokenContract.read.decimals();
+      const buyTokenSymbol = await buyTokenContract.symbol();
+      const buyTokenDecimals = await buyTokenContract.decimals();
 
       Logger.log(
         `Initial user balance (${tokenSymbol}): `,
@@ -348,12 +352,18 @@ describe("RainbowRouter Aggregators", function () {
         TESTDATA_DIR,
         source,
         "input",
-        tokenContract.address,
-        buyTokenContract.address,
+        tokenAddress.toString(),
+        buyTokenAddress.toString(),
         sellAmountWei.toString(),
         feePercentageBasisPoints.toString(),
       );
       if (!quote) return;
+
+      // Ensure quote values are BigInt
+      quote.sellAmount = BigInt(quote.sellAmount);
+      quote.buyAmount = BigInt(quote.buyAmount);
+      quote.fee = BigInt(quote.fee);
+      quote.value = BigInt(quote.value || 0);
 
       Logger.log(
         "Input amount",
@@ -373,58 +383,51 @@ describe("RainbowRouter Aggregators", function () {
         formatUnits(quote.buyAmount, buyTokenDecimals),
         buyTokenSymbol,
       );
-
-      let { timestamp } = await publicClient.getBlock();
-      await network.provider.send("evm_setNextBlockTimestamp", [Number(++timestamp)]);
-      const deadline = timestamp + 3600n;
-      const permitSignature = await signPermit(
-        tokenContract.address,
-        signer.account.address,
-        rainbowRouterInstance.address,
-        maxUint256,
+      const latestBlock = await ethers.provider.getBlock('latest');
+      const currentTimestamp = latestBlock ? BigInt(latestBlock.timestamp) : BigInt(Math.floor(Date.now() / 1000)); // Fallback to current time if no block
+      
+      const deadline = currentTimestamp + 3600n; // Deadline 1 hour (3600 seconds) in the future
+      const permitSignature: PermitData = await signPermit(
+        signer,
+        tokenContract,
+        await rainbowRouterInstance.getAddress(),
+        MaxUint256,
         deadline,
-        1,
       );
 
-      Logger.log("PERMIT SIGNATURE", JSON.stringify(permitSignature, bigIntReplacer, 2));
+      //Logger.log("PERMIT SIGNATURE", JSON.stringify(permitSignature, bigIntReplacer, 2));
 
-      Logger.log(`Executing swap...`);
+      const warrant: WarrantData = {
+        verifyingSigner: ZeroAddress,
+        nonce: 0n,
+        signature: Sources.Aggregator0x,
+        validBefore: 0n,
+        validAfter: 0n,
+      }
 
-      const swapTx =
-        await rainbowRouterInstance.write.fillQuoteTokenToTokenWithPermit(
-          [
-            quote.sellTokenAddress,
-            quote.buyTokenAddress,
-            quote.to || "0x",
-            quote.data || "0x",
-            quote.sellAmount,
-            quote.fee,
-            permitSignature,
-            {
-              verifyingSigner: zeroAddress,
-              nonce: 0n,
-              validBefore: 0,
-              validAfter: 0,
-              signature: "0x",
-            },
-          ],
-          {
-            value: quote.value,
-          },
-        );
+      Logger.log(`Executing swap with permit...`);
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: swapTx,
-      });
-      showGasUsage &&
-        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      const swapTx = await rainbowRouterInstance.connect(signer).fillQuoteTokenToTokenWithPermit(
+        quote.sellTokenAddress,
+        quote.buyTokenAddress,
+        quote.to || ZeroAddress, // Provide a default value
+        quote.data || Sources.Aggregator0x, // Provide a default value
+        quote.sellAmount,
+        quote.fee,
+        permitSignature,
+        warrant,
+        {
+          value: quote.value,
+        },
+      );
 
-      const tokenBalanceSigner = await tokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
-      const buyTokenBalanceSigner = await buyTokenContract.read.balanceOf([
-        signer.account.address,
-      ]);
+      const receipt = await swapTx.wait();
+      if (showGasUsage && receipt) {
+        Logger.info("      ⛽  Gas usage: ", receipt.gasUsed.toString());
+      }
+
+      const tokenBalanceSigner = await tokenContract.balanceOf(signerAddress);
+      const buyTokenBalanceSigner = await buyTokenContract.balanceOf(signerAddress);
 
       Logger.log(
         `Final user balance (${tokenSymbol}): `,
@@ -435,100 +438,101 @@ describe("RainbowRouter Aggregators", function () {
         formatEther(buyTokenBalanceSigner),
       );
       expect(tokenBalanceSigner).to.be.equal(0n);
-      expect(buyTokenBalanceSigner > initialBuyTokenBalance).to.be.equal(true);
+      expect(buyTokenBalanceSigner).to.be.gt(initialBuyTokenBalance);
     };
   });
 
   describe("Trades with Permit", function () {
     it("Should be able to swap DAI to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", DAI_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", DAI_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, DAI_ADDRESS, SELL_AMOUNT, 0n);
+      console.log("ETH => TOKEN done")
+      return swapTokentoETH(Sources.Aggregator0x, DAI_ADDRESS, 0n);
     });
 
     it("Should be able to swap DAI to ENS using permit instead of approval", async function () {
-      await swapETHtoToken("0x", DAI_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoToken("0x", DAI_ADDRESS, ENS_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, DAI_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoToken(Sources.Aggregator0x, DAI_ADDRESS, ENS_ADDRESS, 0n);
     });
 
     it("Should be able to swap INCH to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", INCH_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", INCH_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, INCH_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, INCH_ADDRESS, 0n);
     });
 
     it("Should be able to swap ENS to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", ENS_ADDRESS, 1n, 0n);
-      return swapTokentoETH("1inch", ENS_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, ENS_ADDRESS, "1", 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, ENS_ADDRESS, 0n);
     });
 
     it("Should be able to swap USDC to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", USDC_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", USDC_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, USDC_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, USDC_ADDRESS, 0n);
     });
 
     it("Should be able to swap USDC to ENS using permit instead of approval", async function () {
-      await swapETHtoToken("0x", USDC_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoToken("0x", USDC_ADDRESS, ENS_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, USDC_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoToken(Sources.Aggregator0x, USDC_ADDRESS, ENS_ADDRESS, 0n);
     });
 
     it("Should be able to swap LQTY to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", LQTY_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", LQTY_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, LQTY_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, LQTY_ADDRESS, 0n);
     });
 
     it("Should be able to swap RAD to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", RAD_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", RAD_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, RAD_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, RAD_ADDRESS, 0n);
     });
 
     it("Should be able to swap BAL to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", BAL_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", BAL_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, BAL_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, BAL_ADDRESS, 0n);
     });
 
     it("Should be able to swap TRIBE to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", TRIBE_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", TRIBE_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, TRIBE_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, TRIBE_ADDRESS, 0n);
     });
 
     it("Should be able to swap MIST to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", MIST_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", MIST_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, MIST_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, MIST_ADDRESS, 0n);
     });
 
     it("Should be able to swap OPIUM to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", OPIUM_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", OPIUM_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, OPIUM_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, OPIUM_ADDRESS, 0n);
     });
 
     it("Should be able to swap FEI to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", FEI_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", FEI_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, FEI_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, FEI_ADDRESS, 0n);
     });
 
     it("Should be able to swap VSP to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", VSP_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", VSP_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, VSP_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, VSP_ADDRESS, 0n);
     });
 
     it("Should be able to swap TORN to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("1inch", TORN_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("1inch", TORN_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregotor1inch, TORN_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, TORN_ADDRESS, 0n);
     });
 
     it("Should be able to swap WNXM to ETH using permit instead of approval", async function () {
-      await swapETHtoToken("0x", WNXM_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", WNXM_ADDRESS, 0n);
+      await swapETHtoToken(Sources.Aggregator0x, WNXM_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, WNXM_ADDRESS, 0n);
     });
   });
 
   describe("it should preserve the allowance after being set to MAX_INT", () => {
     it("Should be able to swap DAI to ETH with an existing approval via permit", async function () {
-      await swapETHtoToken("0x", DAI_ADDRESS, SELL_AMOUNT, 0n);
-      return swapTokentoETH("0x", DAI_ADDRESS, 0n, false);
+      await swapETHtoToken(Sources.Aggregator0x, DAI_ADDRESS, SELL_AMOUNT, 0n);
+      return swapTokentoETH(Sources.Aggregator0x, DAI_ADDRESS, 0n, false);
     });
     it("Should be able to swap ENS to ETH with an existing approval via permit", async function () {
-      await swapETHtoToken("1inch", ENS_ADDRESS, "1", 0n);
-      return swapTokentoETH("1inch", ENS_ADDRESS, 0n, false);
+      await swapETHtoToken(Sources.Aggregotor1inch, ENS_ADDRESS, "1", 0n);
+      return swapTokentoETH(Sources.Aggregotor1inch, ENS_ADDRESS, 0n, false);
     });
   });
 });

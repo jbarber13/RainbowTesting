@@ -374,6 +374,16 @@ contract BaseAggregator {
         CanoeHelper.Warrant calldata warrant
     ) internal {
         // 0 - verify the canoe warrant
+        console.log("ON CHAIN LOGS: ");
+        console.log("sellTokenAddress: ", sellTokenAddress);
+        console.log("buyTokenAddress: ", buyTokenAddress);
+        console.log("target: ", target);
+        console.log("swapCallData: ");
+        console.logBytes32(keccak256(swapCallData));
+        console.log("sellAmount: ", sellAmount);
+        console.log("feeAmount: ", feeAmount);
+        
+
         CanoeHelper.verifyWarrant(
             keccak256(
                 abi.encode(

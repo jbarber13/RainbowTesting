@@ -21,12 +21,12 @@ describe("Permit Signature", () => {
     let signer: Signer;
 
     before(async () => {
-        console.log("Before");
+        //console.log("Before");
     });
 
     it("Setup", async function (this: any) {
         this.timeout(10000);
-        console.log("STARTING");
+        //console.log("STARTING");
 
         // reset
         await network.provider.request({
@@ -39,7 +39,7 @@ describe("Permit Signature", () => {
                 },
             ],
         });
-        console.log("reset to OP");
+        //console.log("reset to OP");
 
         signer = (await ethers.getSigners())[0]
 
@@ -97,7 +97,7 @@ describe("Permit Signature", () => {
         //generate permit2 signature
 
         const network = await ethers.provider.getNetwork();
-        console.log("Chain ID:", network.chainId);
+        //console.log("Chain ID:", network.chainId);
 
         const permitData = await generatePermitSignature(
             signer,
@@ -109,9 +109,10 @@ describe("Permit Signature", () => {
 
         //fund transaction
         await stealMoney(usdcNativeWhale, await signer.getAddress(), await USDC.getAddress(), usdcAmount)
+        console.log("Stole USDC")
 
         //send the tx 
-        console.log("SENDING")
+        //console.log("SENDING")
         let tx = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
             await USDC.getAddress(),
             await WETH.getAddress(),
@@ -123,11 +124,12 @@ describe("Permit Signature", () => {
             warrant
         )
         await tx.wait()
-        console.log("done")
+        //console.log("done")
     })
 
     it("Test swapRouter", async () => {
         await stealMoney(usdcNativeWhale, await signer.getAddress(), await USDC.getAddress(), usdcAmount)
+        console.log("Stole USDC")
         expect(await USDC.balanceOf(await signer.getAddress())).to.eq(usdcAmount, "Insufficient balance")
 
 
@@ -152,7 +154,7 @@ describe("Permit Signature", () => {
 
         await USDC.connect(signer).approve("0xE592427A0AEce92De3Edee1F18E0157C05861564", usdcAmount)
         const allowance = await USDC.allowance(await signer.getAddress(), "0xE592427A0AEce92De3Edee1F18E0157C05861564")
-        console.log("Allowance: ", allowance)
+        //console.log("Allowance: ", allowance)
 
         const params = {
             tokenIn: await USDC.getAddress(),
@@ -183,7 +185,7 @@ describe("Permit Signature", () => {
 
 
         const [signer] = await ethers.getSigners();
-        console.log("Using signer:", signer.address);
+        //console.log("Using signer:", signer.address);
 
         const USDC = ERC20__factory.connect(usdcAddress, signer);
         // WETH connection not strictly needed for this call structure, but good to have
@@ -238,17 +240,17 @@ describe("Permit Signature", () => {
             signature: "0x"
         };
 
-        console.log("--- Calling fillQuoteEthToToken ---");
-        console.log("Signer:", signer.address);
-        console.log("Your Contract:", await Rainbow.getAddress());
-        console.log("Buy Token (USDC):", buyTokenAddress);
-        console.log("Target (Uniswap Router):", targetAddress); // Updated Target
-        //console.log("Swap Call Data (for Uniswap):", swapCallData); // Generated Uniswap data
-        console.log("   -> Decoded Params:", exactInputSingleParams); // Show decoded params
-        console.log("Fee Amount:", feeAmount.toString());
-        console.log("Warrant:", warrant);
-        console.log("Sending ETH Value:", ethers.formatEther(wethAmount), "ETH");
-        console.log(`*** WARNING: amountOutMinimum set to ${usdcAmountOutMinimum}. Use a calculated value in production! ***`);
+        //console.log("--- Calling fillQuoteEthToToken ---");
+        //console.log("Signer:", signer.address);
+        //console.log("Your Contract:", await Rainbow.getAddress());
+        //console.log("Buy Token (USDC):", buyTokenAddress);
+        //console.log("Target (Uniswap Router):", targetAddress); // Updated Target
+        ////console.log("Swap Call Data (for Uniswap):", swapCallData); // Generated Uniswap data
+        //console.log("   -> Decoded Params:", exactInputSingleParams); // Show decoded params
+        //console.log("Fee Amount:", feeAmount.toString());
+        //console.log("Warrant:", warrant);
+        //console.log("Sending ETH Value:", ethers.formatEther(wethAmount), "ETH");
+        //console.log(`*** WARNING: amountOutMinimum set to ${usdcAmountOutMinimum}. Use a calculated value in production! ***`);
 
 
         // --- Execute the Transaction ---
@@ -263,19 +265,19 @@ describe("Permit Signature", () => {
             }
         );
 
-        console.log("Transaction submitted:", tx.hash);
-        console.log("Waiting for transaction confirmation...");
+        //console.log("Transaction submitted:", tx.hash);
+        //console.log("Waiting for transaction confirmation...");
 
         const receipt = await tx.wait();
 
-        console.log("Transaction confirmed in block:", receipt?.blockNumber);
-        console.log("Gas used:", receipt?.gasUsed.toString());
+        //console.log("Transaction confirmed in block:", receipt?.blockNumber);
+        //console.log("Gas used:", receipt?.gasUsed.toString());
 
         // Optional: Check balances after the swap
         const signerEthBalanceAfter = await ethers.provider.getBalance(signer.address);
         const usdcBalanceAfter = await USDC.balanceOf(signer.address); // Check signer's balance
-        console.log("Signer ETH balance after:", ethers.formatEther(signerEthBalanceAfter));
-        console.log("Signer USDC balance after:", ethers.formatUnits(usdcBalanceAfter, 6)); // Assuming 6 decimals for USDC
+        //console.log("Signer ETH balance after:", ethers.formatEther(signerEthBalanceAfter));
+        //console.log("Signer USDC balance after:", ethers.formatUnits(usdcBalanceAfter, 6)); // Assuming 6 decimals for USDC
 
     })
 
@@ -349,15 +351,110 @@ describe("Permit Signature", () => {
         const targetAddress = UNIVERSAL_ROUTER_ADDRESS_OPTIMISM;
 
         // --- Log and Use ---
-        console.log("Target (Universal Router on Optimism):", targetAddress);
-        console.log("Swap Call Data (UR Execute):", swapCallData);
-        console.log("Decoded Commands:", commands);
-        console.log("Decoded Input[0] (V3 Swap Params):", abiCoder.decode(["address", "uint256", "uint256", "bytes", "bool"], inputsV3Swap));
-        console.log("Decoded Input[1] (Unwrap Params):", abiCoder.decode(["address", "uint256"], inputsUnwrapWETH));
+        //console.log("Target (Universal Router on Optimism):", targetAddress);
+        //console.log("Swap Call Data (UR Execute):", swapCallData);
+        //console.log("Decoded Commands:", commands);
+        //console.log("Decoded Input[0] (V3 Swap Params):", abiCoder.decode(["address", "uint256", "uint256", "bytes", "bool"], inputsV3Swap));
+        //console.log("Decoded Input[1] (Unwrap Params):", abiCoder.decode(["address", "uint256"], inputsUnwrapWETH));
 
 
     })
 
+    it("Test warrant validation", async () => {
+        // --- 1. Setup: Define Signer and Transaction Parameters ---
+        const feeAmount = 0n;
+        const sellTokenAddress = await USDC.getAddress();
+        const buyTokenAddress = await WETH.getAddress();
+        const rainbowAddress = await Rainbow.getAddress();
+        
+        console.log("TESTING WARRANT")
+        console.log("USDC AMOUNT: ", Number(usdcAmount))
+    
+
+        const swapCallData = await generateUniTxData(
+            sellTokenAddress, buyTokenAddress, usdcAmount, routerAddr,
+            500, rainbowAddress, 0n
+        );
+    
+        // --- 2. Prepare Warrant Data (excluding signature) ---
+        const millisecondsSinceEpoch: number = Date.now();
+        const time: number = Math.floor(millisecondsSinceEpoch / 1000);
+        const validBefore: number = time + 3600;
+        const validAfter: number = time - 300;
+        const nonce: bigint = 1n; // Using BigInt 1n
+        const verifyingSignerAddress: string = await signer.getAddress();
+    
+        // --- 3. Calculate Hashes for Signing (Off-Chain) ---
+    
+        // a) Hash the swapCallData
+        const swapCallDataHash = ethers.keccak256(swapCallData);
+    
+        // b) Calculate dataHash
+        const dataHash = ethers.keccak256(
+          ethers.AbiCoder.defaultAbiCoder().encode(
+            ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+            [sellTokenAddress, buyTokenAddress, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
+          )
+        );
+        console.log("Off-Chain dataHash:", dataHash);
+    
+        // c) Pack warrant validation data (Nonce, Timestamps) using BIT SHIFTING
+        // *** This now matches the contract's _packValidationData ***
+        const nonceBI = BigInt(nonce);
+        const validBeforeBI = BigInt(validBefore);
+        const validAfterBI = BigInt(validAfter);
+    
+        // Replicates: uint160(nonce) | (uint256(validBefore) << 160) | (uint256(validAfter) << 208)
+        const packedValueBI = nonceBI | (validBeforeBI << 160n) | (validAfterBI << 208n);
+        console.log("Off-Chain packed uint256 value:", packedValueBI.toString());
+    
+    
+        // d) Calculate the final hash to be signed (dataToVerify)
+        // Matches: keccak256(abi.encode(packed_uint256_value, dataHash))
+        const dataToVerify = ethers.keccak256(
+            ethers.AbiCoder.defaultAbiCoder().encode(
+                 ['uint256', 'bytes32'], // Encode the packed uint256 and the dataHash
+                 [packedValueBI, dataHash]
+            )
+        );
+        console.log("Off-Chain dataToVerify:", dataToVerify); // Compare this with on-chain logs if needed
+    
+    
+        // --- 4. Sign the Hash ---
+        const signature = await signer.signMessage(ethers.getBytes(dataToVerify));
+        console.log("Off-Chain Signature:", signature);
+        console.log("Off-Chain Verifying Signer:", verifyingSignerAddress);
+        console.log("Off-Chain swapCallDataHash:", swapCallDataHash);
+        // --- 5. Construct the Warrant Struct ---
+        const warrant = {
+            nonce: nonce, // Use the original nonce value/type
+            validBefore: validBefore, // Use the original number timestamp
+            validAfter: validAfter, // Use the original number timestamp
+            verifyingSigner: verifyingSignerAddress,
+            signature: signature
+        };
+    
+        // --- 6. Prepare Permit2 Signature ---
+        const network = await ethers.provider.getNetwork();
+        const permitData = await generatePermitSignature(
+            signer, network.chainId, sellTokenAddress, usdcAmount, rainbowAddress
+        );
+    
+        // --- 7. Prepare Funds ---
+        await stealMoney(usdcNativeWhale, await signer.getAddress(), sellTokenAddress, usdcAmount);
+    
+        // --- 8. Execute Transaction ---
+        console.log("Sending transaction with corrected warrant packing...");
+    
+        let tx = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
+            sellTokenAddress, buyTokenAddress, routerAddr, swapCallData,
+            usdcAmount, feeAmount, permitData, warrant
+        );
+        await tx.wait();
+        console.log("Transaction successful with warrant validation!");
+    
+
+    });
 
 
     /**
@@ -381,12 +478,12 @@ describe("Permit Signature", () => {
         if (!chainId) {
             throw new Error("Chain ID not found in Hardhat network config");
         }
-        console.log("Using signer:", signer.address);
-        console.log("Chain ID:", chainId);
+        //console.log("Using signer:", signer.address);
+        //console.log("Chain ID:", chainId);
 
         // Assuming `Rainbow` is your deployed contract instance variable
         const rainbowContractAddress = await Rainbow.getAddress();
-        console.log("Your Contract (Rainbow):", rainbowContractAddress);
+        //console.log("Your Contract (Rainbow):", rainbowContractAddress);
 
         const USDC = ERC20__factory.connect(usdcAddress, signer);
         const WETH = IERC20__factory.connect(wethAddress, signer); // Needed for wethAddress constant
@@ -426,7 +523,7 @@ describe("Permit Signature", () => {
         const feePercentageBasisPoints = 0n;
 
         // 6. permitData - Generate Permit2 signature
-        console.log(`Generating Permit2 signature for ${ethers.formatUnits(usdcAmount, 6)} USDC...`);
+        //console.log(`Generating Permit2 signature for ${ethers.formatUnits(usdcAmount, 6)} USDC...`);
         // Ensure the generatePermitSignature function correctly targets Permit2
         const permitData = await generatePermitSignature(
             signer,
@@ -435,7 +532,7 @@ describe("Permit Signature", () => {
             sellAmount,       // Amount being permitted
             rainbowContractAddress // Spender (your contract)
         );
-        console.log("Permit generated:", permitData);
+        //console.log("Permit generated:", permitData);
         // Note: Before running this, the signer must have approved the standard Permit2 contract
         // to spend their USDC (usually a one-time setup).
 
@@ -452,21 +549,21 @@ describe("Permit Signature", () => {
         };
 
         // --- Log Prepared Call Data ---
-        console.log("--- Calling fillQuoteTokenToEthWithPermit ---");
-        console.log("Sell Token (USDC):", sellTokenAddress);
-        console.log("Target (Uniswap Router):", targetAddress);
-        console.log("   -> Decoded Swap Params (Recipient is Contract):", exactInputSingleParams);
-        console.log("Sell Amount:", ethers.formatUnits(sellAmount, 6), "USDC");
-        console.log("Fee Basis Points:", feePercentageBasisPoints.toString());
-        // console.log("Permit Data:", permitData); // Already logged above
-        console.log("Warrant:", warrant);
-        console.log(`*** WARNING: amountOutMinimum set to ${wethAmountOutMinimum}. Use a calculated value in production! ***`);
+        //console.log("--- Calling fillQuoteTokenToEthWithPermit ---");
+        //console.log("Sell Token (USDC):", sellTokenAddress);
+        //console.log("Target (Uniswap Router):", targetAddress);
+        //console.log("   -> Decoded Swap Params (Recipient is Contract):", exactInputSingleParams);
+        //console.log("Sell Amount:", ethers.formatUnits(sellAmount, 6), "USDC");
+        //console.log("Fee Basis Points:", feePercentageBasisPoints.toString());
+        //// console.log("Permit Data:", permitData); // Already logged above
+        //console.log("Warrant:", warrant);
+        //console.log(`*** WARNING: amountOutMinimum set to ${wethAmountOutMinimum}. Use a calculated value in production! ***`);
 
         // --- Get Balances Before ---
         const contractEthBalanceBefore = await ethers.provider.getBalance(rainbowContractAddress);
         const signerUsdcBalanceBefore = await USDC.balanceOf(signer.address);
-        console.log("Contract ETH balance before:", ethers.formatEther(contractEthBalanceBefore));
-        console.log("Signer USDC balance before:", ethers.formatUnits(signerUsdcBalanceBefore, 6));
+        //console.log("Contract ETH balance before:", ethers.formatEther(contractEthBalanceBefore));
+        //console.log("Signer USDC balance before:", ethers.formatUnits(signerUsdcBalanceBefore, 6));
 
         // --- Execute the Transaction ---
         // NO { value: ... } needed here as we are sending tokens via Permit2
@@ -480,19 +577,19 @@ describe("Permit Signature", () => {
             warrant
         );
 
-        console.log("Transaction submitted:", tx.hash);
-        console.log("Waiting for transaction confirmation...");
+        //console.log("Transaction submitted:", tx.hash);
+        //console.log("Waiting for transaction confirmation...");
 
         const receipt = await tx.wait();
 
-        console.log("Transaction confirmed in block:", receipt?.blockNumber);
-        console.log("Gas used:", receipt?.gasUsed.toString());
+        //console.log("Transaction confirmed in block:", receipt?.blockNumber);
+        //console.log("Gas used:", receipt?.gasUsed.toString());
 
         // --- Check Balances After ---
         const contractEthBalanceAfter = await ethers.provider.getBalance(rainbowContractAddress);
         const signerUsdcBalanceAfter = await USDC.balanceOf(signer.address);
-        console.log("Contract ETH balance after:", ethers.formatEther(contractEthBalanceAfter));
-        console.log("Signer USDC balance after:", ethers.formatUnits(signerUsdcBalanceAfter, 6));
+        //console.log("Contract ETH balance after:", ethers.formatEther(contractEthBalanceAfter));
+        //console.log("Signer USDC balance after:", ethers.formatUnits(signerUsdcBalanceAfter, 6));
 
         // Assertions (Example)
         expect(signerUsdcBalanceAfter).to.be.lt(signerUsdcBalanceBefore); // Signer should have less USDC
@@ -535,7 +632,7 @@ describe("Permit Signature", () => {
             "function execute(bytes commands, bytes[] inputs, uint256 deadline)"
         ]);
 
-        console.log("SENDING")
+        //console.log("SENDING")
         await signer.sendTransaction({
             to: universalRouter,
             data: iface.encodeFunctionData("execute", [
@@ -544,7 +641,7 @@ describe("Permit Signature", () => {
                 sweepDeadline,
             ])
         })
-        console.log("SENT")
+        //console.log("SENT")
 
         try {
             // Try static call first
@@ -553,11 +650,11 @@ describe("Permit Signature", () => {
                 sweepInputs,
                 sweepDeadline
             );
-            console.log("SWEEP command static call simulation successful.");
+            //console.log("SWEEP command static call simulation successful.");
             // Optionally try actual transaction
             // const tx = await universalRouterContract.execute(sweepCommand, sweepInputs, sweepDeadline);
             // await tx.wait();
-            // console.log("SWEEP command actual transaction successful.");
+            //// console.log("SWEEP command actual transaction successful.");
         } catch (e) {
             console.error("SWEEP command failed:", e);
         }
@@ -577,12 +674,12 @@ describe("Permit Signature", () => {
         const amountOutMin = 1n;
 
         // --- Pre-computation Logging ---
-        console.log("--- Addresses ---");
-        console.log(`Signer (Recipient): ${recipientAddress}`);
-        console.log(`USDC Contract:      ${usdcAddress}`);
-        console.log(`WETH Contract:      ${wethAddress}`);
-        console.log(`Router Contract:    ${routerAddressString}`);
-        console.log(`Input Amount (USDC):${usdcAmount}`);
+        //console.log("--- Addresses ---");
+        //console.log(`Signer (Recipient): ${recipientAddress}`);
+        //console.log(`USDC Contract:      ${usdcAddress}`);
+        //console.log(`WETH Contract:      ${wethAddress}`);
+        //console.log(`Router Contract:    ${routerAddressString}`);
+        //console.log(`Input Amount (USDC):${usdcAmount}`);
 
         const { commands, inputs, deadline, txData } = await generateUniversalRouterTxData(
             usdcAddress, // Explicitly pass address strings or verified AddressLike
@@ -594,18 +691,18 @@ describe("Permit Signature", () => {
         );
 
         // --- Pre-Call State Logging ---
-        console.log("\n--- State Before Approval & Call ---");
+        //console.log("\n--- State Before Approval & Call ---");
         const balanceBefore = await USDC.balanceOf(recipientAddress);
         const allowanceBefore = await USDC.allowance(recipientAddress, routerAddressString);
-        console.log(`USDC Balance:  ${balanceBefore}`);
-        console.log(`USDC Allowance for Router: ${allowanceBefore}`);
+        //console.log(`USDC Balance:  ${balanceBefore}`);
+        //console.log(`USDC Allowance for Router: ${allowanceBefore}`);
         expect(balanceBefore).to.be.gte(usdcAmount, "Insufficient balance before approval");
 
-        console.log(`Approving router (${routerAddressString}) for ${usdcAmount} USDC...`);
+        //console.log(`Approving router (${routerAddressString}) for ${usdcAmount} USDC...`);
         await USDC.connect(signer).approve(routerAddressString, usdcAmount); // Use the verified string address
 
         const allowanceAfter = await USDC.allowance(recipientAddress, routerAddressString);
-        console.log(`Allowance check post-approve: ${allowanceAfter}`);
+        //console.log(`Allowance check post-approve: ${allowanceAfter}`);
         expect(allowanceAfter).to.be.gte(usdcAmount, "Allowance not set correctly after approve"); // Use gte just in case
 
         const universalRouterAbi = [
@@ -619,14 +716,14 @@ describe("Permit Signature", () => {
 
         // Corrected static call
         try {
-            console.log("\nSimulating transaction with staticCall...");
+            //console.log("\nSimulating transaction with staticCall...");
             const simulationProvider = universalRouterContract.connect(signer.provider);
             const result = await simulationProvider.getFunction("execute").staticCall(
                 commands,
                 inputs,
                 deadline
             );
-            console.log("Simulated static call successful. Result:", result);
+            //console.log("Simulated static call successful. Result:", result);
         } catch (error) {
             console.error("\nStatic call simulation failed:", error); // Log the full error
             // Add specific checks based on error
@@ -653,7 +750,7 @@ describe("Permit Signature", () => {
             await Rainbow.getAddress()
         )
 
-        console.log("got data: ", txData)
+        //console.log("got data: ", txData)
 
         // Get milliseconds since epoch
         const millisecondsSinceEpoch: number = Date.now();
@@ -670,7 +767,7 @@ describe("Permit Signature", () => {
         }
 
         const network = await ethers.provider.getNetwork();
-        console.log("Chain ID:", network.chainId);
+        //console.log("Chain ID:", network.chainId);
 
         const permitData = await generatePermitSignature(
             signer,

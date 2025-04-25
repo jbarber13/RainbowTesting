@@ -3,4 +3,7 @@
 /* eslint-disable */
 import type * as cryptography from "./cryptography";
 export type { cryptography };
+import type * as math from "./math";
+export type { math };
 export type { Address } from "./Address";
+export type { Strings } from "./Strings";

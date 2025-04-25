@@ -1,34 +1,34 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import { promises as fs } from "fs";
 import {
-    ethers,
-    ZeroAddress // Ethers v6 ZeroAddress
+  ethers,
+  ZeroAddress // Ethers v6 ZeroAddress
 } from "ethers";
 import type {
-    Signer,
-    Provider,
-    Contract,
-    AddressLike,
-    BigNumberish,
-    BytesLike,
-    Signature,
-    TransactionResponse, // For type hinting deployment tx
-    Overrides, // For transaction overrides like gas price
-    ContractTransactionResponse // For type hinting contract write txs
+  Signer,
+  Provider,
+  Contract,
+  AddressLike,
+  BigNumberish,
+  BytesLike,
+  Signature,
+  TransactionResponse, // For type hinting deployment tx
+  Overrides, // For transaction overrides like gas price
+  ContractTransactionResponse // For type hinting contract write txs
 } from "ethers";
 
 // Import relevant TypeChain types (adjust paths as needed)
 import {
-    type IERC20,
-    type IWETH,
-    type IDAI,
-    type IERC20Metadata,
-    type IERC2612,
-    type IERC2612Extension, // Assuming this interface exists for _nonces
-    type RainbowRouter,
-    RainbowRouter__factory,
-    IDAI__factory,
-    IWETH__factory
+  type IERC20,
+  type IWETH,
+  type IDAI,
+  type IERC20Metadata,
+  type IERC2612,
+  type IERC2612Extension, // Assuming this interface exists for _nonces
+  type RainbowRouter,
+  RainbowRouter__factory,
+  IDAI__factory,
+  IWETH__factory
 } from "../../typechain-types";
 
 // Keep your types, potentially update Address/Hex if needed, or use ethers types
@@ -94,9 +94,9 @@ const getVaultBalanceForToken = async (
 ): Promise<bigint> => {
   // Use ethers.Contract for read-only calls with a provider
   const tokenContract = new ethers.Contract(tokenAddress.toString(), [
-      // Minimal ABI for balanceOf
-      "function balanceOf(address owner) view returns (uint256)"
-    ], provider) as unknown as IERC20; // Cast to TypeChain type
+    // Minimal ABI for balanceOf
+    "function balanceOf(address owner) view returns (uint256)"
+  ], provider) as unknown as IERC20; // Cast to TypeChain type
   return tokenContract.balanceOf(vaultAddress);
 };
 
@@ -172,23 +172,23 @@ const EIP712_DOMAIN_TYPE_NO_VERSION = [
 ];
 
 const EIP2612_TYPE = { // Use object for ethers v6 types
-    Permit: [
-        { name: "owner", type: "address" },
-        { name: "spender", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" },
-    ]
+  Permit: [
+    { name: "owner", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ]
 };
 
 const PERMIT_ALLOWED_TYPE = { // Use object for ethers v6 types (DAI style)
-    Permit: [
-        { name: "holder", type: "address" },
-        { name: "spender", type: "address" },
-        { name: "nonce", type: "uint256" },
-        { name: "expiry", type: "uint256" },
-        { name: "allowed", type: "bool" },
-    ]
+  Permit: [
+    { name: "holder", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "expiry", type: "uint256" },
+    { name: "allowed", type: "bool" },
+  ]
 };
 
 /**
@@ -201,58 +201,58 @@ const getPermitVersion = async (
   tokenAddress: AddressLike,
   provider: Provider, // Accept provider
 ): Promise<string | null> => {
-    const tokenContract = new ethers.Contract(tokenAddress.toString(), [
-        // Minimal ABI for version() and DOMAIN_SEPARATOR()
-        "function version() view returns (string)",
-        "function DOMAIN_SEPARATOR() view returns (bytes32)"
-    ], provider) as unknown as IERC2612; // Cast to a suitable TypeChain type
+  const tokenContract = new ethers.Contract(tokenAddress.toString(), [
+    // Minimal ABI for version() and DOMAIN_SEPARATOR()
+    "function version() view returns (string)",
+    "function DOMAIN_SEPARATOR() view returns (bytes32)"
+  ], provider) as unknown as IERC2612; // Cast to a suitable TypeChain type
 
-    const name = await new ethers.Contract(tokenAddress.toString(), ["function name() view returns (string)"], provider).name();
-    const { chainId } = await provider.getNetwork();
+  const name = await new ethers.Contract(tokenAddress.toString(), ["function name() view returns (string)"], provider).name();
+  const { chainId } = await provider.getNetwork();
 
-    try {
-        const version = await tokenContract.version();
-        // Basic check if version looks valid (e.g., not empty)
-        if (version && typeof version === 'string') {
-            return version;
-        }
-        // Fall through if version() reverts or returns non-string/empty
-    } catch (e) {
-        // version() might not exist or revert, try DOMAIN_SEPARATOR approach
+  try {
+    const version = await tokenContract.version();
+    // Basic check if version looks valid (e.g., not empty)
+    if (version && typeof version === 'string') {
+      return version;
     }
+    // Fall through if version() reverts or returns non-string/empty
+  } catch (e) {
+    // version() might not exist or revert, try DOMAIN_SEPARATOR approach
+  }
 
-    // Try DOMAIN_SEPARATOR approach for version "1" guessing
-    const versionGuess = "1";
-    try {
-        const domainSeparator = await tokenContract.DOMAIN_SEPARATOR();
+  // Try DOMAIN_SEPARATOR approach for version "1" guessing
+  const versionGuess = "1";
+  try {
+    const domainSeparator = await tokenContract.DOMAIN_SEPARATOR();
 
-        // Reconstruct the domain separator locally for version "1"
-        const domain: ethers.TypedDataDomain = {
-            name: name,
-            version: versionGuess,
-            chainId: chainId,
-            verifyingContract: await ethers.resolveAddress(tokenAddress, provider),
-        };
-        const reconstructedSeparator = ethers.TypedDataEncoder.hashDomain(domain);
+    // Reconstruct the domain separator locally for version "1"
+    const domain: ethers.TypedDataDomain = {
+      name: name,
+      version: versionGuess,
+      chainId: chainId,
+      verifyingContract: await ethers.resolveAddress(tokenAddress, provider),
+    };
+    const reconstructedSeparator = ethers.TypedDataEncoder.hashDomain(domain);
 
-        if (domainSeparator === reconstructedSeparator) {
-            return versionGuess;
-        }
-    } catch (_) {
-        // DOMAIN_SEPARATOR() might not exist or revert
-        // Handle known edge cases without DOMAIN_SEPARATOR or version()
-        const lowerCaseAddress = (await ethers.resolveAddress(tokenAddress, provider)).toLowerCase();
-        if (
-            [TORN_ADDRESS, WNXM_ADDRESS, VSP_ADDRESS]
-                .map((t) => t.toLowerCase())
-                .includes(lowerCaseAddress)
-        ) {
-            return "1"; // Assume version 1 for these specific tokens
-        }
-        return null; // Cannot determine version
+    if (domainSeparator === reconstructedSeparator) {
+      return versionGuess;
     }
+  } catch (_) {
+    // DOMAIN_SEPARATOR() might not exist or revert
+    // Handle known edge cases without DOMAIN_SEPARATOR or version()
+    const lowerCaseAddress = (await ethers.resolveAddress(tokenAddress, provider)).toLowerCase();
+    if (
+      [TORN_ADDRESS, WNXM_ADDRESS, VSP_ADDRESS]
+        .map((t) => t.toLowerCase())
+        .includes(lowerCaseAddress)
+    ) {
+      return "1"; // Assume version 1 for these specific tokens
+    }
+    return null; // Cannot determine version
+  }
 
-    return null; // No version found
+  return null; // No version found
 };
 
 /**
@@ -263,43 +263,61 @@ const getPermitVersion = async (
  * @returns Promise<bigint> The nonce.
  */
 const getNonces = async (
-    tokenAddress: AddressLike,
-    ownerAddress: AddressLike,
-    provider: Provider, // Accept provider
+  tokenAddress: AddressLike,
+  ownerAddress: AddressLike,
+  provider: Provider, // Accept provider
 ): Promise<bigint> => {
-    const resolvedTokenAddress = await ethers.resolveAddress(tokenAddress, provider);
-    const resolvedOwnerAddress = await ethers.resolveAddress(ownerAddress, provider);
-    const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
+  const resolvedTokenAddress = await ethers.resolveAddress(tokenAddress, provider);
+  const resolvedOwnerAddress = await ethers.resolveAddress(ownerAddress, provider);
+  const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
 
-    try {
-        if (isDaiStylePermit) {
-            const tokenContract = new ethers.Contract(resolvedTokenAddress, [
-                 // Minimal DAI ABI for nonces
-                "function nonces(address owner) view returns (uint256)"
-            ], provider) as unknown as IDAI;
-            return await tokenContract.nonces(resolvedOwnerAddress);
-        } else {
-            // Try standard EIP-2612 nonces() first
-            try {
-                 const tokenContractStd = new ethers.Contract(resolvedTokenAddress, [
-                    "function nonces(address owner) view returns (uint256)"
-                ], provider) as unknown as IERC2612;
-                 return await tokenContractStd.nonces(resolvedOwnerAddress);
-            } catch (e) {
-                // Fallback to _nonces() if nonces() doesn't exist (less common now)
-                 const tokenContractExt = new ethers.Contract(resolvedTokenAddress, [
-                    "function _nonces(address owner) view returns (uint256)" // Check your exact interface name
-                ], provider) as unknown as IERC2612Extension; // Use appropriate interface
-                 return await tokenContractExt._nonces(resolvedOwnerAddress);
-            }
-        }
-    } catch (e) {
-        // If nonces call fails for any reason, assume nonce is 0
-        Logger.log(`Could not fetch nonce for ${resolvedTokenAddress}, assuming 0:`, e);
-        return 0n;
+  try {
+    if (isDaiStylePermit) {
+      const tokenContract = new ethers.Contract(resolvedTokenAddress, [
+        // Minimal DAI ABI for nonces
+        "function nonces(address owner) view returns (uint256)"
+      ], provider) as unknown as IDAI;
+      return await tokenContract.nonces(resolvedOwnerAddress);
+    } else {
+      // Try standard EIP-2612 nonces() first
+      try {
+        const tokenContractStd = new ethers.Contract(resolvedTokenAddress, [
+          "function nonces(address owner) view returns (uint256)"
+        ], provider) as unknown as IERC2612;
+        return await tokenContractStd.nonces(resolvedOwnerAddress);
+      } catch (e) {
+        // Fallback to _nonces() if nonces() doesn't exist (less common now)
+        const tokenContractExt = new ethers.Contract(resolvedTokenAddress, [
+          "function _nonces(address owner) view returns (uint256)" // Check your exact interface name
+        ], provider) as unknown as IERC2612Extension; // Use appropriate interface
+        return await tokenContractExt._nonces(resolvedOwnerAddress);
+      }
     }
+  } catch (e) {
+    // If nonces call fails for any reason, assume nonce is 0
+    Logger.log(`Could not fetch nonce for ${resolvedTokenAddress}, assuming 0:`, e);
+    return 0n;
+  }
 };
 
+
+export type PermitData = {
+  value: bigint,
+  nonce: bigint,
+  deadline: bigint,
+  isDaiStylePermit: boolean,
+  v: bigint,
+  r: string,
+  s: string
+}
+
+export type WarrantData = {
+  nonce: bigint,
+  validBefore: bigint,
+  validAfter: bigint,
+  verifyingSigner: string,
+  signature: string
+}
 /**
  * Creates an EIP-2612 or DAI-style permit signature.
  * @param signer The ethers Signer to sign the permit.
@@ -318,15 +336,15 @@ async function signPermit(
 ) {
   const provider = signer.provider;
   if (!provider) {
-      throw new Error("Signer must be connected to a provider.");
+    throw new Error("Signer must be connected to a provider.");
   }
   const resolvedTokenAddress = await ethers.resolveAddress(tokenAddress, provider);
   const ownerAddress = await signer.getAddress();
   const { chainId } = await provider.getNetwork();
 
   const tokenContract = new ethers.Contract(resolvedTokenAddress, [
-       // Minimal ABI for name
-      "function name() view returns (string)"
+    // Minimal ABI for name
+    "function name() view returns (string)"
   ], provider) as unknown as IERC20Metadata;
 
   const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
@@ -348,7 +366,7 @@ async function signPermit(
 
   let message: Record<string, any>;
   let types: Record<string, ethers.TypedDataField[]>;
-
+  console.log("Is Dai Style? : ", isDaiStylePermit)
   if (isDaiStylePermit) {
     types = PERMIT_ALLOWED_TYPE;
     message = {
@@ -369,13 +387,6 @@ async function signPermit(
     };
   }
 
-  // Ensure numeric types are correctly formatted (ethers handles BigInt)
-  // Deadline and nonce should be BigInt or number
-  message.deadline = BigInt(message.deadline);
-  message.expiry = message.expiry ? BigInt(message.expiry) : undefined; // Handle undefined expiry for non-DAI
-  message.nonce = BigInt(nonce); // Ensure nonce is BigInt
-
-
   // Sign the typed data using the provided signer
   const signature = await signer.signTypedData(domain, types, message);
 
@@ -383,14 +394,15 @@ async function signPermit(
   const sig = ethers.Signature.from(signature);
 
   return {
+    value: BigInt(value),
     r: sig.r,
     s: sig.s,
-    v: sig.v, // v is already normalized by ethers
+    v: BigInt(sig.v), // v is already normalized by ethers
     deadline: BigInt(deadline), // Return deadline as BigInt
-    nonce: nonce, // Return nonce as BigInt
+    nonce: BigInt(nonce), // Return nonce as BigInt
     isDaiStylePermit,
     // value: BigInt(value), // Optionally return value if needed elsewhere
-  };
+  } as PermitData;
 }
 
 
@@ -410,11 +422,11 @@ async function getQuoteFromFile(
   const data = await fs.readFile(fileName, 'utf-8'); // Specify encoding
   // Need to parse BigInts correctly if using the 'n' suffix
   const quote: Quote = JSON.parse(data, (key, value) => {
-        if (typeof value === 'string' && /^\d+n$/.test(value)) {
-            return BigInt(value.slice(0, -1));
-        }
-        return value;
-    });
+    if (typeof value === 'string' && /^\d+n$/.test(value)) {
+      return BigInt(value.slice(0, -1));
+    }
+    return value;
+  });
   return quote;
 }
 
