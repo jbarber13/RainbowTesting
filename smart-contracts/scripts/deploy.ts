@@ -14,6 +14,10 @@ const version = "1.0"
 const userAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
 const gfxOwner = "0x00a0bB9dfD2db3a6E447147426aB2D1B5Ac356d5"
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function main() {
 
   console.log("STARTING")
@@ -54,8 +58,12 @@ async function main() {
 
 
   const contract = await new RainbowRouter__factory().connect(signer).deploy(name, version)
-  await contract.deploymentTransaction()
-  console.log("DEPLOYED: ", await contract.getAddress())
+  await contract.waitForDeployment()
+  if (mainnet) {
+    await sleep(5000)
+  }
+  const tx = await contract.deploymentTransaction()
+  console.log("DEPLOYED: ", await contract.getAddress(), tx?.hash)
 
 
   //register things
@@ -65,16 +73,14 @@ async function main() {
   //await contract.transferOwnership(gfxOwner)
 
   if (mainnet) {
-    const verification = await hre.run("verify:verify", {
+    await hre.run("verify:verify", {
       address: await contract.getAddress(),
       constructorArguments: [name, version]
     })
-    console.log("Submitting verification...")
-    await Promise.all([verification])
   }
 
 }
 
 main().catch(console.error);
 
-//hh verify --network op 0x882f17ad0499AE24FAeCd3CF09e509B98038fd95
+//hh verify --network op 0x003CCe004267597A3FFDA5C1945DA0C2C9276c96 "Rainbow Router" "1.0"

@@ -14,11 +14,9 @@ library CanoeHelper {
         bytes signature;
     }
 
-    // --- EIP-712 Specific ---
     string constant public EIP712_CANOE_WARRANT_TYPE = "CanoeWarrant(uint256 packedValidationData,bytes32 dataHash)";
     bytes32 constant public TYPEHASH_CANOE_WARRANT = keccak256(bytes(EIP712_CANOE_WARRANT_TYPE));
 
-    // --- Helper Function (Unchanged) ---
     function _packValidationData(
         uint160 nonce,
         uint48 validBefore,
@@ -32,7 +30,7 @@ library CanoeHelper {
 
     // --- Core Verification Logic (Corrected EIP-712 Digest Calculation) ---
     function verifyWarrant(
-        bytes32 domainSeparator, // Pass in the domain separator from the caller
+        bytes32 domainSeparator, 
         bytes32 dataHash,
         Warrant memory warrant
     ) internal view {
@@ -62,7 +60,7 @@ library CanoeHelper {
             )
         );
 
-        // 3. Calculate the EIP-712 digest manually (Corrected Line)
+        // 3. Calculate the EIP-712 digest manually 
         // Structure: keccak256("\x19\x01" + domainSeparator + structHash)
         bytes32 digest = keccak256(abi.encodePacked(
             "\x19\x01",        // EIP-712 prefix

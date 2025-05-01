@@ -34,7 +34,6 @@ const zaddr =
 // Go to https://hardhat.org/config/ to learn more
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
-  /**
   etherscan: {
     apiKey: {
       mainnet: process.env.API_KEY!,
@@ -56,7 +55,6 @@ const config: HardhatUserConfig = {
       linea_mainnet: process.env.LINEA_API_KEY!
     },
   },
-   */
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     currency: 'USD',
