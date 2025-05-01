@@ -119,7 +119,7 @@ const init = async () => {
 
   // Deploy RainbowRouter using ethers v6
   // Note: Pass constructor args if any, then overrides
-  const rainbowRouterInstance = await new RainbowRouter__factory(signer).deploy()
+  const rainbowRouterInstance = await new RainbowRouter__factory(signer).deploy("Rainow Router", "1.0")
   await rainbowRouterInstance.waitForDeployment(); // Wait for deployment confirmation
   const instanceAddress = await rainbowRouterInstance.getAddress();
   Logger.log("Contract address", instanceAddress);
@@ -366,8 +366,8 @@ async function signPermit(
 
   let message: Record<string, any>;
   let types: Record<string, ethers.TypedDataField[]>;
-  console.log("Is Dai Style? : ", isDaiStylePermit)
   if (isDaiStylePermit) {
+    
     types = PERMIT_ALLOWED_TYPE;
     message = {
       holder: ownerAddress,

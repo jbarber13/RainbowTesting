@@ -58,7 +58,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./routers/BaseAggregator.sol";
 import "./libraries/SafeTransferLib.sol";
 
-import "hardhat/console.sol";
 
 /// @title Rainbow swap aggregator contract
 contract RainbowRouter is BaseAggregator {
@@ -96,7 +95,7 @@ contract RainbowRouter is BaseAggregator {
         _;
     }
 
-    constructor() {
+    constructor(string memory _name, string memory _version) BaseAggregator(_name, _version) {
         owner = msg.sender;
         status = 1;
     }

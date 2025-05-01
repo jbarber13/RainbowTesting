@@ -8,6 +8,7 @@ import type {
   FunctionFragment,
   Result,
   Interface,
+  EventFragment,
   AddressLike,
   ContractRunner,
   ContractMethod,
@@ -17,6 +18,7 @@ import type {
   TypedContractEvent,
   TypedDeferredTopicFilter,
   TypedEventLog,
+  TypedLogDescription,
   TypedListener,
   TypedContractMethod,
 } from "../../common";
@@ -78,6 +80,7 @@ export declare namespace PermitHelper {
 export interface BaseAggregatorInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "eip712Domain"
       | "fillQuoteEthToToken"
       | "fillQuoteTokenToEth"
       | "fillQuoteTokenToEthWithPermit"
@@ -87,6 +90,12 @@ export interface BaseAggregatorInterface extends Interface {
       | "validSigners"
   ): FunctionFragment;
 
+  getEvent(nameOrSignatureOrTopic: "EIP712DomainChanged"): EventFragment;
+
+  encodeFunctionData(
+    functionFragment: "eip712Domain",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "fillQuoteEthToToken",
     values: [
@@ -155,6 +164,10 @@ export interface BaseAggregatorInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "eip712Domain",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "fillQuoteEthToToken",
     data: BytesLike
   ): Result;
@@ -182,6 +195,16 @@ export interface BaseAggregatorInterface extends Interface {
     functionFragment: "validSigners",
     data: BytesLike
   ): Result;
+}
+
+export namespace EIP712DomainChangedEvent {
+  export type InputTuple = [];
+  export type OutputTuple = [];
+  export interface OutputObject {}
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export interface BaseAggregator extends BaseContract {
@@ -226,6 +249,22 @@ export interface BaseAggregator extends BaseContract {
   removeAllListeners<TCEvent extends TypedContractEvent>(
     event?: TCEvent
   ): Promise<this>;
+
+  eip712Domain: TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
 
   fillQuoteEthToToken: TypedContractMethod<
     [
@@ -303,6 +342,23 @@ export interface BaseAggregator extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "eip712Domain"
+  ): TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "fillQuoteEthToToken"
   ): TypedContractMethod<
@@ -383,5 +439,24 @@ export interface BaseAggregator extends BaseContract {
     nameOrSignature: "validSigners"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
-  filters: {};
+  getEvent(
+    key: "EIP712DomainChanged"
+  ): TypedContractEvent<
+    EIP712DomainChangedEvent.InputTuple,
+    EIP712DomainChangedEvent.OutputTuple,
+    EIP712DomainChangedEvent.OutputObject
+  >;
+
+  filters: {
+    "EIP712DomainChanged()": TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
+    >;
+    EIP712DomainChanged: TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
+    >;
+  };
 }

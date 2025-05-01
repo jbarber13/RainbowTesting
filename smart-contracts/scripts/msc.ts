@@ -310,7 +310,7 @@ export const generatePermitSignature = async (
         const contractNonce = await tokenContract.nonces(ownerAddress);
         // If the call succeeds, update the nonce variable
         nonce = contractNonce;
-        console.log(`Successfully fetched nonce: ${nonce}`);
+        //console.log(`Successfully fetched nonce: ${nonce}`);
 
     } catch (error: any) {
         // Check if the error indicates the function likely doesn't exist

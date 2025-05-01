@@ -7,11 +7,10 @@ import "../libraries/PermitHelper.sol";
 import "../libraries/SafeTransferLib.sol";
 import "../libraries/CanoeHelper.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
-import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title Rainbow base aggregator contract
-contract BaseAggregator {
+contract BaseAggregator is EIP712 {
     /// @dev Used to prevent re-entrancy
     uint256 internal status;
 
@@ -48,6 +47,11 @@ contract BaseAggregator {
         _;
     }
 
+    constructor(
+        string memory _name,
+        string memory _version
+    ) EIP712(_name, _version) {}
+
     /** EXTERNAL **/
 
     /// @param buyTokenAddress the address of token that the user should receive
@@ -70,6 +74,7 @@ contract BaseAggregator {
     {
         // 0 - verify the canoe warrant
         CanoeHelper.verifyWarrant(
+            _domainSeparatorV4(),
             keccak256(
                 abi.encode(
                     buyTokenAddress,
@@ -292,6 +297,7 @@ contract BaseAggregator {
     ) internal {
         // 0 - verify the canoe warrant
         CanoeHelper.verifyWarrant(
+            _domainSeparatorV4(),
             keccak256(
                 abi.encode(
                     sellTokenAddress,
@@ -373,18 +379,9 @@ contract BaseAggregator {
         uint256 feeAmount,
         CanoeHelper.Warrant calldata warrant
     ) internal {
-        // 0 - verify the canoe warrant
-        console.log("ON CHAIN LOGS: ");
-        console.log("sellTokenAddress: ", sellTokenAddress);
-        console.log("buyTokenAddress: ", buyTokenAddress);
-        console.log("target: ", target);
-        console.log("swapCallData: ");
-        console.logBytes32(keccak256(swapCallData));
-        console.log("sellAmount: ", sellAmount);
-        console.log("feeAmount: ", feeAmount);
-        
-
+       
         CanoeHelper.verifyWarrant(
+            _domainSeparatorV4(),
             keccak256(
                 abi.encode(
                     sellTokenAddress,

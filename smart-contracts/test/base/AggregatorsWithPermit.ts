@@ -445,7 +445,6 @@ describe("RainbowRouter Aggregators", function () {
   describe("Trades with Permit", function () {
     it("Should be able to swap DAI to ETH using permit instead of approval", async function () {
       await swapETHtoToken(Sources.Aggregator0x, DAI_ADDRESS, SELL_AMOUNT, 0n);
-      console.log("ETH => TOKEN done")
       return swapTokentoETH(Sources.Aggregator0x, DAI_ADDRESS, 0n);
     });
 
@@ -525,7 +524,7 @@ describe("RainbowRouter Aggregators", function () {
     });
   });
 
-  describe("it should preserve the allowance after being set to MAX_INT", () => {
+  describe("It should preserve the allowance after being set to MAX_INT", () => {
     it("Should be able to swap DAI to ETH with an existing approval via permit", async function () {
       await swapETHtoToken(Sources.Aggregator0x, DAI_ADDRESS, SELL_AMOUNT, 0n);
       return swapTokentoETH(Sources.Aggregator0x, DAI_ADDRESS, 0n, false);

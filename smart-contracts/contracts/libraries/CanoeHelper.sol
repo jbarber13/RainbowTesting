@@ -1,15 +1,10 @@
-//SPDX-License-Identifier: GPL-3.0
-pragma solidity =0.8.27;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-
-//testing
-import "hardhat/console.sol";
 
 library CanoeHelper {
     using ECDSA for bytes32;
-    using MessageHashUtils for bytes32;
 
     struct Warrant {
         uint160 nonce;
@@ -19,66 +14,70 @@ library CanoeHelper {
         bytes signature;
     }
 
+    // --- EIP-712 Specific ---
+    string constant public EIP712_CANOE_WARRANT_TYPE = "CanoeWarrant(uint256 packedValidationData,bytes32 dataHash)";
+    bytes32 constant public TYPEHASH_CANOE_WARRANT = keccak256(bytes(EIP712_CANOE_WARRANT_TYPE));
+
+    // --- Helper Function (Unchanged) ---
     function _packValidationData(
         uint160 nonce,
         uint48 validBefore,
         uint48 validAfter
     ) internal pure returns (uint256) {
         return
-            uint160(nonce) |
+            uint256(nonce) |
             (uint256(validBefore) << 160) |
             (uint256(validAfter) << (160 + 48));
     }
 
+    // --- Core Verification Logic (Corrected EIP-712 Digest Calculation) ---
     function verifyWarrant(
+        bytes32 domainSeparator, // Pass in the domain separator from the caller
         bytes32 dataHash,
         Warrant memory warrant
     ) internal view {
-        // if the verifyingSigner is 0, it means that the warrant system is disabled, and we will function like the rainbow router
+        // If the verifyingSigner is 0, the warrant system is disabled.
         if (warrant.verifyingSigner == address(0)) {
             return;
         }
 
-        console.log("Verify Warrant: ");
-        console.log("nonce: ", warrant.nonce);
-        console.log("validBefore: ", warrant.validBefore);
-        console.log("validAfter: ", warrant.validAfter);
-        console.log("verifyingSigner: ", warrant.verifyingSigner);
-        console.log("signature: ");
-        console.logBytes(warrant.signature);
+        // Time validity checks
+        require(block.timestamp <= warrant.validBefore, "CANOE: EXPIRED");
+        require(block.timestamp >= warrant.validAfter, "CANOE: NOT_YET");
+        require(warrant.validAfter <= warrant.validBefore, "CANOE: INVALID_TIMESTAMPS");
 
-        require(warrant.validBefore >= block.timestamp, "CANOE: EXPIRED");
-        require(warrant.validAfter <= block.timestamp, "CANOE: NOT_YET");
-        require(
-            warrant.validAfter <= warrant.validBefore,
-            "CANOE: INVALID TIMESTAMPS"
-        );
-
-        bytes32 dataToVerify = keccak256(
-            abi.encode(
-                _packValidationData(
-                    warrant.nonce,
-                    warrant.validBefore,
-                    warrant.validAfter
-                ),
-                dataHash
-            )
-        );
-        console.log("On-Chain dataToVerify:");
-        console.logBytes32(dataToVerify);
-        uint256 onChainPackedValue = _packValidationData(
+        // 1. Pack the warrant-specific validation data
+        uint256 packedValidationData = _packValidationData(
             warrant.nonce,
             warrant.validBefore,
             warrant.validAfter
         );
 
-        console.log("On-Chain packedValue (uint256):", onChainPackedValue); // Add if not present
+        // 2. Calculate the EIP-712 struct hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                TYPEHASH_CANOE_WARRANT,
+                packedValidationData,
+                dataHash
+            )
+        );
 
+        // 3. Calculate the EIP-712 digest manually (Corrected Line)
+        // Structure: keccak256("\x19\x01" + domainSeparator + structHash)
+        bytes32 digest = keccak256(abi.encodePacked(
+            "\x19\x01",        // EIP-712 prefix
+            domainSeparator,   // Domain separator hash provided by caller
+            structHash         // Struct hash calculated above
+        ));
+
+        // 4. Recover the signer
         address recoveredSigner = ECDSA.recover(
-            dataToVerify.toEthSignedMessageHash(),
+            digest,
             warrant.signature
         );
 
+        // 5. Validate the signer
+        require(recoveredSigner != address(0), "CANOE: INVALID_SIG_RECOVERY");
         require(
             recoveredSigner == warrant.verifyingSigner,
             "CANOE: INVALID_SIGNATURE"

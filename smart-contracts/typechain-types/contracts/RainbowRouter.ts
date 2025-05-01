@@ -80,6 +80,7 @@ export declare namespace PermitHelper {
 export interface RainbowRouterInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "eip712Domain"
       | "fillQuoteEthToToken"
       | "fillQuoteTokenToEth"
       | "fillQuoteTokenToEthWithPermit"
@@ -97,6 +98,7 @@ export interface RainbowRouterInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "EIP712DomainChanged"
       | "EthWithdrawn"
       | "OwnerChanged"
       | "SwapTargetAdded"
@@ -106,6 +108,10 @@ export interface RainbowRouterInterface extends Interface {
       | "ValidSignerRemoved"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "eip712Domain",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "fillQuoteEthToToken",
     values: [
@@ -195,6 +201,10 @@ export interface RainbowRouterInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "eip712Domain",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "fillQuoteEthToToken",
     data: BytesLike
   ): Result;
@@ -243,6 +253,16 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "withdrawToken",
     data: BytesLike
   ): Result;
+}
+
+export namespace EIP712DomainChangedEvent {
+  export type InputTuple = [];
+  export type OutputTuple = [];
+  export interface OutputObject {}
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace EthWithdrawnEvent {
@@ -380,6 +400,22 @@ export interface RainbowRouter extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  eip712Domain: TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
+
   fillQuoteEthToToken: TypedContractMethod<
     [
       buyTokenAddress: AddressLike,
@@ -488,6 +524,23 @@ export interface RainbowRouter extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "eip712Domain"
+  ): TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "fillQuoteEthToToken"
   ): TypedContractMethod<
@@ -603,6 +656,13 @@ export interface RainbowRouter extends BaseContract {
   >;
 
   getEvent(
+    key: "EIP712DomainChanged"
+  ): TypedContractEvent<
+    EIP712DomainChangedEvent.InputTuple,
+    EIP712DomainChangedEvent.OutputTuple,
+    EIP712DomainChangedEvent.OutputObject
+  >;
+  getEvent(
     key: "EthWithdrawn"
   ): TypedContractEvent<
     EthWithdrawnEvent.InputTuple,
@@ -653,6 +713,17 @@ export interface RainbowRouter extends BaseContract {
   >;
 
   filters: {
+    "EIP712DomainChanged()": TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
+    >;
+    EIP712DomainChanged: TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
+    >;
+
     "EthWithdrawn(address,uint256)": TypedContractEvent<
       EthWithdrawnEvent.InputTuple,
       EthWithdrawnEvent.OutputTuple,

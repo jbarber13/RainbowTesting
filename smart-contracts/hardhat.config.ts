@@ -63,6 +63,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
+      chainId: 1,
       forking: {
         url: process.env.MAINNET_URL ? process.env.MAINNET_URL : zaddr,
         blockNumber: 14546835,
