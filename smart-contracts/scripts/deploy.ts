@@ -1,51 +1,80 @@
-/* eslint-disable no-console */
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// When running the script with `npx hardhat run <script>` you'll find the Hardhat
-// Runtime Environment's members available in the global scope.
-import { ethers, run } from 'hardhat';
+
+import { Signer } from "ethers";
+import { RainbowRouter__factory } from "../typechain-types"
+import hre, { network } from "hardhat";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+
+const { ethers } = require("hardhat");
+
+
+const name = "Rainbow Router"
+const version = "1.0"
+
+
+const userAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
+const gfxOwner = "0x00a0bB9dfD2db3a6E447147426aB2D1B5Ac356d5"
 
 async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  await run('compile');
 
-  const accounts = await ethers.getSigners();
-  const owner = accounts[0];
+  console.log("STARTING")
+  let networkName = hre.network.name
+  let mainnet = true
+  let signer: Signer
 
-  console.log('Owner address', owner.address);
+  if (networkName == "hardhat" || networkName == "localhost") {
+    //testing
+    mainnet = false
 
-  try {
-    const RainbowRouter = await ethers.getContractFactory('RainbowRouter');
-    const rainbowRouterInstance = await RainbowRouter.deploy();
-    console.log('Waiting for tx to confirm', rainbowRouterInstance.hash);
-    const tx = await rainbowRouterInstance.deployed();
-    console.log('Contract deployed at address', rainbowRouterInstance.address);
-    if (tx.deployTransaction.blockNumber) {
-      const blockInfo = await ethers.provider.send('eth_getBlockByNumber', [
-        ethers.utils.hexValue(tx.deployTransaction.blockNumber),
-        true,
-      ]);
+    //reset
+    await network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.OP_URL!
+          },
+        },
+      ],
+    });
+    console.log("Reset to OP")
 
-      console.log(
-        'GAS USED: ',
-        ethers.BigNumber.from(blockInfo.gasUsed).toNumber()
-      );
-    }
-  } catch (e) {
-    console.log('ERROR deploying contract!', e);
+    signer = await ethers.getSigner(userAddr)
+    await setBalance(userAddr, ethers.parseEther("1000"))
+
+    await network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [userAddr],
+    });
+
+  } else {
+    [signer] = await ethers.getSigners()
+
+    console.log("DEPLOYING TO LIVE NETWORK: ", networkName, " as ", await signer.getAddress())
   }
+
+
+  const contract = await new RainbowRouter__factory().connect(signer).deploy(name, version)
+  await contract.deploymentTransaction()
+  console.log("DEPLOYED: ", await contract.getAddress())
+
+
+  //register things
+
+
+  //console.log("Transferring ownership to ", gfxOwner)
+  //await contract.transferOwnership(gfxOwner)
+
+  if (mainnet) {
+    const verification = await hre.run("verify:verify", {
+      address: await contract.getAddress(),
+      constructorArguments: [name, version]
+    })
+    console.log("Submitting verification...")
+    await Promise.all([verification])
+  }
+
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch(console.error);
+
+//hh verify --network op 0x882f17ad0499AE24FAeCd3CF09e509B98038fd95

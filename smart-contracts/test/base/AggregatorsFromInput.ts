@@ -116,7 +116,6 @@ describe("RainbowRouter Aggregators", function () {
         },
       ],
     });
-    console.log("RESET");
 
     // Assume init is updated for ethers v6
     const initResult = await init();

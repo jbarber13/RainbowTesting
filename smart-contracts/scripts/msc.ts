@@ -1,13 +1,9 @@
 import { AbiCoder, AddressLike, BigNumberish, BytesLike, Interface, Signer, TransactionResponse, TypedDataDomain } from "ethers";
-import { ERC20__factory, IERC20, IERC2612Extension__factory, IPermit2__factory, ISwapRouter02__factory, UniswapV3Pool } from "../typechain-types";
+import { ERC20__factory, ISwapRouter02__factory } from "../typechain-types";
 import { ethers, network } from "hardhat";
-import { AllowanceTransfer } from "@uniswap/permit2-sdk";
-import hre from "hardhat";
-import { impersonateAccount, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { IERC20__factory } from "../typechain-types/factories/contracts/interfaces/openzeppelin";
-import { Address } from "viem";
 
-const abi = new AbiCoder()
 
 type PermitDetails = {
     token: string
@@ -159,114 +155,6 @@ export const generateUniversalRouterTxData = async (
 };
 
 
-/**
- * 
- * @param chainId 
- * @param expiration 
- * @return permitData and signature
- */
-export const permitSingle = async (
-    signer: Signer,
-    chainId: number,
-    token: string,
-    amount: bigint,
-    spender: string,
-    permit2: string,
-    nonce: number = 0,
-    expiration?: number,
-) => {
-    if (expiration == undefined) {
-        expiration = Math.floor(Date.now() / 1000) + 60 * 60 // 1 hour from now
-    }
-
-    const networkName = hre.network.name
-    if (networkName == "hardhat" || networkName == "localhost") {
-        console.log("IMPERSONATING", await signer.getAddress())
-        signer = await ethers.getSigner(await signer.getAddress())
-        await impersonateAccount(await signer.getAddress())
-    }
-
-    //verify token allowance
-    const tokenContract = ERC20__factory.connect(token, signer)
-    const tokenAllowance = await tokenContract.allowance(await signer.getAddress(), permit2)
-    if (tokenAllowance < amount) {
-        console.log(`No permit2 approval for ${await tokenContract.symbol()}, approving max now...`)
-        const MAX_UINT256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        await tokenContract.connect(signer).approve(permit2, MAX_UINT256)
-    }
-
-    const PERMIT = IPermit2__factory.connect(permit2, signer)
-
-    const allowance = await PERMIT.allowance(
-        await signer.getAddress(),
-        token,
-        spender
-    )
-
-    nonce = Number(allowance[2])
-
-    const permitDetails: PermitDetails = {
-        token: token,
-        amount: amount.toString(),
-        expiration: expiration.toString(),
-        nonce: nonce.toString(),
-    }
-
-    const permitSingle: PermitSingle = {
-        details: permitDetails,
-        spender: spender,
-        sigDeadline: (expiration + 86400).toString()
-    }
-
-    const { domain, types, values } = AllowanceTransfer.getPermitData(permitSingle, permit2, chainId)
-
-    const signature = await signer.signTypedData(domain as TypedDataDomain, types, values)
-
-    return {
-        signature: signature,
-        permitSingle: permitSingle
-    }
-}
-export function encodePermit2PayloadLegacy(permit: Permit2Payload): string {
-    const abiCoder = new ethers.AbiCoder();
-    const encodedData = abiCoder.encode(
-        [
-            "((" +
-            "(address,uint160,uint48,uint48)," +
-            "address,uint256)," +
-            "bytes)",
-        ],
-        [
-            [
-                [
-                    [
-                        permit.permitSingle.details.token,
-                        permit.permitSingle.details.amount,
-                        permit.permitSingle.details.expiration,
-                        permit.permitSingle.details.nonce,
-                    ],
-                    permit.permitSingle.spender,
-                    permit.permitSingle.sigDeadline,
-                ],
-                permit.signature,
-            ],
-        ]
-    );
-    return encodedData
-}
-export const encodePermitSingle = async (signer: Signer,
-    chainId: number,
-    token: string,
-    amount: bigint,
-    spender: string,
-    permit2: string,
-    nonce: number = 0,
-    expiration?: number) => {
-
-    const permit: Permit2Payload = await permitSingle(signer, chainId, token, amount, spender, permit2, nonce, expiration)
-    return encodePermit2PayloadLegacy(permit)
-
-}
 
 export interface PermitOutput {
     value: bigint;
