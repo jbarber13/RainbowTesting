@@ -17,6 +17,9 @@ import type {
   ContractTransactionResponse // For type hinting contract write txs
 } from "ethers";
 
+import hre from "hardhat";
+
+
 // Import relevant TypeChain types (adjust paths as needed)
 import {
   type IERC20,
@@ -428,6 +431,11 @@ async function getQuoteFromFile(
     return value;
   });
   return quote;
+}
+
+export const hardhat_mine_timed = async (blocks: number, interval: number) => {
+  await hre.network.provider.send("hardhat_mine", [("0x" + blocks.toString(16)), ("0x" + interval.toString(16))])
+  return
 }
 
 

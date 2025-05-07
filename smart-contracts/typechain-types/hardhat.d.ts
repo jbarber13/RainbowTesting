@@ -62,6 +62,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20PermitAllowed__factory>;
     getContractFactory(
+      name: "IMetaAggregationRouterV2",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IMetaAggregationRouterV2__factory>;
+    getContractFactory(
       name: "IDAI",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IDAI__factory>;
@@ -203,6 +207,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC20PermitAllowed>;
     getContractAt(
+      name: "IMetaAggregationRouterV2",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IMetaAggregationRouterV2>;
+    getContractAt(
       name: "IDAI",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -352,6 +361,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20PermitAllowed>;
     deployContract(
+      name: "IMetaAggregationRouterV2",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMetaAggregationRouterV2>;
+    deployContract(
       name: "IDAI",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IDAI>;
@@ -492,6 +505,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20PermitAllowed>;
+    deployContract(
+      name: "IMetaAggregationRouterV2",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMetaAggregationRouterV2>;
     deployContract(
       name: "IDAI",
       args: any[],

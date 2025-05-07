@@ -32,6 +32,8 @@ export type { Strings } from "./@openzeppelin/contracts/utils/Strings";
 export { Strings__factory } from "./factories/@openzeppelin/contracts/utils/Strings__factory";
 export type { IERC20PermitAllowed } from "./@uniswap/v3-periphery/contracts/interfaces/external/IERC20PermitAllowed";
 export { IERC20PermitAllowed__factory } from "./factories/@uniswap/v3-periphery/contracts/interfaces/external/IERC20PermitAllowed__factory";
+export type { IMetaAggregationRouterV2 } from "./contracts/interfaces/aggregators/IKyberSwapRouter.sol/IMetaAggregationRouterV2";
+export { IMetaAggregationRouterV2__factory } from "./factories/contracts/interfaces/aggregators/IKyberSwapRouter.sol/IMetaAggregationRouterV2__factory";
 export type { IDAI } from "./contracts/interfaces/IDAI";
 export { IDAI__factory } from "./factories/contracts/interfaces/IDAI__factory";
 export type { IERC2612 } from "./contracts/interfaces/IERC2612";

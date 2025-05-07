@@ -5,6 +5,7 @@
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
     "@uniswap/v3-periphery": "^1.4.4",
+    "axios": "^1.9.0",
     "typechain": "^8.3.2"
   },
   "scripts": {

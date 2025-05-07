@@ -1,13 +1,16 @@
 
 import hre, { network } from "hardhat";
-import { IERC20__factory, RainbowRouter, RainbowRouter__factory } from "../typechain-types";
-import { Signer, ZeroAddress } from "ethers";
+import { ERC20__factory, IERC20__factory, RainbowRouter, RainbowRouter__factory } from "../typechain-types";
+import { AbiCoder, formatUnits, keccak256, Signer, ZeroAddress } from "ethers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
-import { generatePermitSignature, generateUniTxData } from "./msc";
+import { ERC20, IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
+import { generatePermitSignature, generateUniTxData, stealMoney } from "./msc";
+import axios from "axios";
 
 const { ethers } = require("hardhat");
 
+const RAINBOW_ROUTER_EIP712_NAME = "Rainbow Router";
+const RAINBOW_ROUTER_EIP712_VERSION = "1.0";
 
 const routerAddr = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
 const ownerAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
@@ -26,6 +29,7 @@ async function main() {
   let networkName = hre.network.name
 
   let signer: Signer
+  let owner: Signer
 
 
   if (networkName == "hardhat" || networkName == "localhost") {
@@ -43,8 +47,10 @@ async function main() {
       ],
     });
     console.log("reset to OP")
+    const signers = await ethers.getSigners()
+    signer = signers[0]
 
-    signer = await ethers.getSigner(ownerAddr)
+    owner = await ethers.getSigner(ownerAddr)
     await setBalance(ownerAddr, ethers.parseEther("1000"))
     await network.provider.request({
       method: "hardhat_impersonateAccount",
@@ -55,6 +61,7 @@ async function main() {
     console.log("DEPLOYING TO LIVE NETWORK: ", networkName,)
     const provider = new ethers.JsonRpcProvider(process.env.OP_URL!)
     signer = new ethers.Wallet(process.env.MAINNET_PRIVATE_KEY!, provider)
+    owner = new ethers.Wallet(process.env.MAINNET_PRIVATE_KEY!, provider)
   }
 
   USDC = IERC20__factory.connect("0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", signer)
@@ -64,21 +71,176 @@ async function main() {
 
   //await sigTest(signer)
 
-  await tokenToToken(signer)
+  //await tokenToToken(signer)
 
+  await setup(owner)
+  await canoeTest(signer, ERC20__factory.connect(await USDC.getAddress(), signer), WETH, usdcAmount, await Rainbow.getAddress())
+
+}
+
+const setup = async (owner: Signer) => {
+
+  Rainbow = RainbowRouter__factory.connect("0x003CCe004267597A3FFDA5C1945DA0C2C9276c96", owner)
+
+
+  await Rainbow.connect(owner).updateSwapTargets("0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", true)
+  await Rainbow.connect(owner).updateValidSigner("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", true)
+  await Rainbow.connect(owner).updateValidSigner("0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", true)
+
+  await Rainbow.connect(owner).updateValidSigner(await owner.getAddress(), true)
 
 }
 
-const sigTest = async (signer: Signer) => {
-  //generate sig
+const canoeTest = async (
+  signer: Signer,
+  usdcContract: ERC20,
+  wethContract: IERC20,
+  inputUsdcAmount: bigint, // raw BigInt amount
+  rainbowRouterAddress: string
+) => {
+  const Rainbow = RainbowRouter__factory.connect(rainbowRouterAddress, signer);
+
+  const feeAmount = 0n;
+  const sellTokenAddress = await usdcContract.getAddress();
+  const buyTokenAddress = await wethContract.getAddress();
+  const rainbowAddress = await Rainbow.getAddress();
+  const currentNetwork = await ethers.provider.getNetwork();
+
+  // Format amount for API call
+  const usdcDecimals = await usdcContract.decimals();
+  const amountInFormattedForApi = formatUnits(inputUsdcAmount, usdcDecimals);
+
+  console.log("Fetching quote from Canoe API...");
+  const baseURL = "https://canoe.icarus.tools/market/kyberswap/swap_quote";
+  const params = {
+    chain: "optimism",
+    account: rainbowAddress,
+    isExactIn: true,
+    inTokenAddress: sellTokenAddress,
+    outTokenAddress: buyTokenAddress,
+    inTokenAmount: amountInFormattedForApi,
+    slippage: 1,
+  };
+
+  let apiData: any;
+  try {
+    const response = await axios.post(baseURL, params);
+    console.log("API Response Status:", response.status);
+    apiData = response.data;
+  } catch (error: any) {
+    console.error("Error fetching swap quote from Canoe:");
+    if (axios.isAxiosError(error)) {
+      console.error("Status:", error.response?.status);
+      console.error("Response Data:", error.response?.data);
+    } else {
+      console.error("An unexpected error occurred:", error.message);
+    }
+    throw new Error("Failed to fetch quote from Canoe API");
+  }
+
+  if (!(apiData && apiData.candidateTrade && apiData.candidateTrade.data && apiData.candidateTrade.to)) {
+    console.error("Invalid API response structure:", apiData);
+    throw new Error("Invalid data from Canoe API");
+  }
+
+  const swapCallDataFromApi = apiData.candidateTrade.data;
+  const routerAddrFromApi = apiData.candidateTrade.to;
+  console.log("ROUTER: ", routerAddrFromApi)
+
+  console.log("Constructing warrant and permit signatures...");
+  console.log("Router Address from API:", routerAddrFromApi);
+  console.log("Swap CallData from API:", swapCallDataFromApi);
+
+  const swapCallDataHash = keccak256(swapCallDataFromApi);
+  const dataHash = keccak256(
+    AbiCoder.defaultAbiCoder().encode(
+      ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+      [sellTokenAddress, buyTokenAddress, routerAddrFromApi, swapCallDataHash, inputUsdcAmount, feeAmount]
+    )
+  );
+
+  const clientCurrentTimeSec = Math.floor(Date.now() / 1000);
+  const warrantValidAfter = BigInt(clientCurrentTimeSec - 300); // 5 minutes ago
+  const warrantValidBefore = BigInt(clientCurrentTimeSec + 3600); // 1 hour from now
+
+  const warrantNonce: bigint = 1n;
+
+  const verifyingSignerAddress: string = await signer.getAddress();
+
+  const packedValidationData = warrantNonce | (warrantValidBefore << 160n) | (warrantValidAfter << 208n);
+
+  const warrantDomain = {
+    name: RAINBOW_ROUTER_EIP712_NAME,
+    version: RAINBOW_ROUTER_EIP712_VERSION,
+    chainId: currentNetwork.chainId,
+    verifyingContract: rainbowAddress,
+  };
+
+  const warrantTypes = {
+    CanoeWarrant: [
+      { name: 'packedValidationData', type: 'uint256' },
+      { name: 'dataHash', type: 'bytes32' },
+    ],
+  };
+
+  const warrantValueToSign = {
+    packedValidationData: packedValidationData,
+    dataHash: dataHash,
+  };
+
+  console.log("Signing warrant with EIP-712:", { warrantDomain, warrantTypes, warrantValueToSign });
+  const warrantSignature = await signer.signTypedData(warrantDomain, warrantTypes, warrantValueToSign);
+
+  const warrant = {
+    nonce: warrantNonce,
+    validBefore: warrantValidBefore,
+    validAfter: warrantValidAfter,
+    verifyingSigner: verifyingSignerAddress,
+    signature: warrantSignature,
+  };
+  console.log("Constructed WARRANT: ", warrant);
+
+  console.log(`Generating permit signature for USDC on chain ${currentNetwork.chainId}...`);
+  const permitData = await generatePermitSignature(
+    signer,
+    currentNetwork.chainId,
+    sellTokenAddress,
+    inputUsdcAmount,        // Raw BigInt amount
+    rainbowAddress
+  );
+  console.log("Generated permitData (sigData): ", permitData);
+
+  if (!mainnet) {
+    //steal money
+    const usdcNativeWhale = "0x133FA49A01801264fC05A12EF5ef9Db6a302e93D"
+    await stealMoney(usdcNativeWhale, await signer.getAddress(), sellTokenAddress, inputUsdcAmount)
+
+  }
+
+  console.log("Calling fillQuoteTokenToTokenWithPermit...");
+  const tx = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
+    sellTokenAddress,
+    buyTokenAddress,
+    routerAddrFromApi,
+    swapCallDataFromApi,
+    inputUsdcAmount,
+    feeAmount,
+    permitData,
+    warrant
+  );
+  console.log("Transaction sent:", tx.hash);
+  await tx.wait();
+  console.log("Transaction confirmed!");
+
+  return tx;
+};
 
 
-}
 
 const deploy = async (signer: Signer) => {
   //Rainbow = RainbowRouter__factory.connect("0x882f17ad0499AE24FAeCd3CF09e509B98038fd95", signer)
 
-  Rainbow = await new RainbowRouter__factory(signer).deploy()
+  Rainbow = await new RainbowRouter__factory(signer).deploy("Rainbow Router", "1.0")
 
   //update swap target
   let tx = await Rainbow.connect(signer).updateSwapTargets(routerAddr, true)
@@ -178,7 +340,7 @@ const tokenToToken = async (signer: Signer) => {
     await tx.wait()
   }
 
-    console.log("complete")
+  console.log("complete")
 
 
 }
