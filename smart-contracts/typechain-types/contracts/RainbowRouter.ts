@@ -86,12 +86,14 @@ export interface RainbowRouterInterface extends Interface {
       | "fillQuoteTokenToEthWithPermit"
       | "fillQuoteTokenToToken"
       | "fillQuoteTokenToTokenWithPermit"
+      | "name"
       | "owner"
       | "swapTargets"
       | "transferOwnership"
       | "updateSwapTargets"
       | "updateValidSigner"
       | "validSigners"
+      | "version"
       | "withdrawEth"
       | "withdrawToken"
   ): FunctionFragment;
@@ -170,6 +172,7 @@ export interface RainbowRouterInterface extends Interface {
       CanoeHelper.WarrantStruct
     ]
   ): string;
+  encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "swapTargets",
@@ -191,6 +194,7 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "validSigners",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(functionFragment: "version", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "withdrawEth",
     values: [AddressLike, BigNumberish]
@@ -224,6 +228,7 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "fillQuoteTokenToTokenWithPermit",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "swapTargets",
@@ -245,6 +250,7 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "validSigners",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "version", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "withdrawEth",
     data: BytesLike
@@ -484,6 +490,8 @@ export interface RainbowRouter extends BaseContract {
     "payable"
   >;
 
+  name: TypedContractMethod<[], [string], "view">;
+
   owner: TypedContractMethod<[], [string], "view">;
 
   swapTargets: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
@@ -507,6 +515,8 @@ export interface RainbowRouter extends BaseContract {
   >;
 
   validSigners: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
+  version: TypedContractMethod<[], [string], "view">;
 
   withdrawEth: TypedContractMethod<
     [to: AddressLike, amount: BigNumberish],
@@ -615,6 +625,9 @@ export interface RainbowRouter extends BaseContract {
     "payable"
   >;
   getFunction(
+    nameOrSignature: "name"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -640,6 +653,9 @@ export interface RainbowRouter extends BaseContract {
   getFunction(
     nameOrSignature: "validSigners"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "version"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "withdrawEth"
   ): TypedContractMethod<

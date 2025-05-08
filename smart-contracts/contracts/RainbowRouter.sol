@@ -63,6 +63,8 @@ import "./libraries/SafeTransferLib.sol";
 contract RainbowRouter is BaseAggregator {
     /// @dev The address that is the current owner of this contract
     address public owner;
+    string public name;
+    string public version;
 
     /// @dev Event emitted when the owner changes
     event OwnerChanged(address indexed newOwner, address indexed oldOwner);
@@ -98,6 +100,8 @@ contract RainbowRouter is BaseAggregator {
     constructor(string memory _name, string memory _version) BaseAggregator(_name, _version) {
         owner = msg.sender;
         status = 1;
+        name = _name;
+        version = _version;
     }
 
     /// @dev We don't want to accept any ETH, except refunds from aggregators
