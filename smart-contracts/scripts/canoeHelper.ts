@@ -1,5 +1,5 @@
-import { AbiCoder, AddressLike, BigNumberish, BytesLike, Interface, keccak256, parseUnits, Signer, TransactionResponse, TypedDataDomain, ZeroAddress } from "ethers";
-import { ERC20__factory, ISwapRouter02__factory, RainbowRouter } from "../typechain-types";
+import { AbiCoder, AddressLike, BigNumberish, BytesLike, formatUnits, Interface, keccak256, parseUnits, Signer, TransactionResponse, TypedDataDomain, ZeroAddress } from "ethers";
+import { ERC20__factory, ISwapRouter02__factory, RainbowRouter, RainbowRouter__factory } from "../typechain-types";
 import { ethers, network } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { IERC20__factory } from "../typechain-types/factories/contracts/interfaces/openzeppelin";
@@ -77,7 +77,17 @@ interface SwapQuoteResponse {
     timestamp: number;       // Unix timestamp 
 }
 
+export type RainbwoDomainInfo = {
+    name: string,
+    version: string,
+    address: string
+}
 
+export type SimResult = {
+    success: boolean,
+    market: MarketId,
+    txData: string
+}
 
 
 export enum MarketId {
@@ -113,31 +123,7 @@ export type canoeParams = {
     slippage: number,
 }
 
-export const getRawCanoeQuote = async (market: string, params: canoeParams) => {
-    const baseURL = `https://canoe.icarus.tools/market/${market}/swap_quote`
-
-    let digest = {}
-
-    try {
-        const response = await axios.post(baseURL, params)
-        digest = response.data
-
-
-    }
-    catch (error: any) {
-        console.log("Error fetching swap quote:");
-        if (axios.isAxiosError(error)) {
-            console.error("Status:", error.response?.status);
-            console.error("Response Data:", error.response?.data);
-            // console.error("Headers:", error.response?.headers);
-        } else {
-            // Handle non-Axios errors (network issues, etc.)
-            console.error("An unexpected error occurred:", error.message);
-        }
-    }
-
-    return digest
-}
+//depricated
 export const getCanoeQuote = async (market: string, params: canoeParams) => {
     const baseURL = `https://canoe.icarus.tools/market/${market}/swap_quote`
     let txData = "0x"
@@ -165,38 +151,107 @@ export const getCanoeQuote = async (market: string, params: canoeParams) => {
     return { txData, recipient, }
 }
 
+export const getRawCanoeQuote = async (market: string, params: canoeParams) => {
+    const baseURL = `https://canoe.icarus.tools/market/${market}/swap_quote`
+    // console.log("Getting swap quote...", baseURL)
+    //console.log(params)
+
+    let digest = {}
+
+    try {
+        const response = await axios.post(baseURL, params)
+        digest = response.data
+
+
+    }
+    catch (error: any) {
+        console.log("Error fetching swap quote:");
+        if (axios.isAxiosError(error)) {
+            console.error("Status:", error.response?.status);
+            console.error("Response Data:", error.response?.data);
+            // console.error("Headers:", error.response?.headers);
+        } else {
+            // Handle non-Axios errors (network issues, etc.)
+            console.error("An unexpected error occurred:", error.message);
+        }
+    }
+
+    return digest
+}
+
+
 export const constructCanoeSwap = async (
     signer: Signer,
     params: canoeParams,
-    Rainbow: RainbowRouter,
+    RainbwoDomainInfo: RainbwoDomainInfo,
     txType: RainbowTxType,
+    market: MarketId,
     chainId?: number,//required to be set to currentNetwork by `await ethers.provider.getNetwork()` for testing
-    market?: MarketId
-) => {
+    retry?: boolean
 
-    console.log("Package Start")
+): Promise<SimResult> => {
 
-    const feeAmount = 0n;
-
-    
+    let readyTx: SimResult = {
+        success: false,
+        market: market,
+        txData: "0x"
+    }
 
 
     //get quote
-    const digest: SwapQuoteResponse = await getRawCanoeQuote(MarketId.KYBERSWAP, params) as SwapQuoteResponse
+    const digest: SwapQuoteResponse = await getRawCanoeQuote(market, params) as SwapQuoteResponse
     //console.log(digest)
 
     if (!(digest && digest.candidateTrade && digest.candidateTrade.data && digest.candidateTrade.to)) {
-        console.error("Invalid API response structure:", digest);
-        throw new Error("Invalid data from Canoe API");
+        //console.error("Invalid API response structure:", digest);
+        //throw new Error("Invalid data from Canoe API");
+    } else {
+        if (chainId == undefined) {
+            chainId = digest.chainId
+        }
+        readyTx = await simulateSwap(signer, RainbwoDomainInfo, txType, market, digest, chainId)
     }
 
-    if(chainId == undefined){
-        chainId = digest.chainId
+    if (readyTx.success) {
+        console.log("Successful route found for ", market)
+    } else {
+        if (retry) {
+
+            //try more routers until we have a success tx
+            const markets = Object.values(MarketId)
+            let i = 0
+            while (!readyTx.success && i < markets.length) {
+                const tryMarket = markets[i]
+                console.log("")
+
+                console.log("Retrying with ", tryMarket)
+
+                //get quote
+                const newDigest: SwapQuoteResponse = await getRawCanoeQuote(tryMarket, params) as SwapQuoteResponse
+
+                if (!(newDigest && newDigest.candidateTrade && newDigest.candidateTrade.data && newDigest.candidateTrade.to)) {
+                    //console.error("Invalid API response structure:", newDigest);
+                    //throw new Error("Invalid data from Canoe API");
+                } else {
+                    if (chainId == undefined) {
+                        chainId = digest.chainId
+                    }
+                    readyTx = await simulateSwap(signer, RainbwoDomainInfo, txType, tryMarket, newDigest, chainId)
+                }
+                i++
+            }
+
+        }
     }
+    return readyTx
+}
+
+
+export const simulateSwap = async (signer: Signer, RainbwoDomainInfo: RainbwoDomainInfo, txType: RainbowTxType, market: MarketId, digest: SwapQuoteResponse, chainId: number): Promise<SimResult> => {
 
     //format input amount
     const inputAmount = parseUnits(digest.inAmount, digest.inToken.decimals);
-   // console.log("input amount: ", inputAmount)
+    // console.log("input amount: ", inputAmount)
 
     const swapCallDataFromApi = digest.candidateTrade.data;
     const routerAddrFromApi = digest.candidateTrade.to;
@@ -205,30 +260,26 @@ export const constructCanoeSwap = async (
     const dataHash = keccak256(
         AbiCoder.defaultAbiCoder().encode(
             ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-            [params.inTokenAddress, params.outTokenAddress, routerAddrFromApi, swapCallDataHash, inputAmount, feeAmount]
+            [digest.inToken.address, digest.outToken.address, routerAddrFromApi, swapCallDataHash, inputAmount, 0]
         )
     );
 
-    const clientCurrentTimeSec = 1746746165//Math.floor(Date.now() / 1000);
+    const clientCurrentTimeSec = Math.floor(Date.now() / 1000);
     const warrantValidAfter = BigInt(clientCurrentTimeSec - 300); // 5 minutes ago
     const warrantValidBefore = BigInt(clientCurrentTimeSec + 3600); // 1 hour from now
 
-    const warrantNonce: bigint = 1n;
+    const warrantNonce: bigint = BigInt(await signer.getNonce());
 
     const verifyingSignerAddress: string = await signer.getAddress();
 
     const packedValidationData = warrantNonce | (warrantValidBefore << 160n) | (warrantValidAfter << 208n);
 
-    //get name and version for signature validation
-    const name = await Rainbow.name()
-    const version = await Rainbow.version()
-    //console.log("GOT: ", name, version)
 
     const warrantDomain = {
-        name: name,
-        version: version,
+        name: RainbwoDomainInfo.name,
+        version: RainbwoDomainInfo.version,
         chainId: chainId,
-        verifyingContract: await Rainbow.getAddress(),
+        verifyingContract: RainbwoDomainInfo.address,
     };
 
     const warrantTypes = {
@@ -243,9 +294,6 @@ export const constructCanoeSwap = async (
         dataHash: dataHash,
     };
 
-    console.log("Domain: ", warrantDomain)
-    console.log("Types: ", warrantTypes)
-    console.log("WVTS: ", warrantValueToSign)
 
     const warrantSignature = await signer.signTypedData(warrantDomain, warrantTypes, warrantValueToSign);
     const warrant = {
@@ -256,159 +304,32 @@ export const constructCanoeSwap = async (
         signature: warrantSignature,
     };
 
-    //console.log("Params: ")//verified match
-    //console.log(params)
-
-    //console.log("Warrant: ")//sig mismatch
-    //console.log(warrant)
 
 
 
-    //format permit data 
-    const permitData = await generatePermitSignature(
-        signer,
-        chainId,
-        params.inTokenAddress,
-        inputAmount,        // Raw BigInt amount
-        await Rainbow.getAddress()
-    );
+    //sim tx
+    const Rainbow = RainbowRouter__factory.connect(RainbwoDomainInfo.address, signer);
 
-    const tx = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
-        params.inTokenAddress,
-        params.outTokenAddress,
-        routerAddrFromApi,
-        swapCallDataFromApi,
-        inputAmount,
-        feeAmount,
-        permitData,
-        warrant
-    );
 
-    await tx.wait();
-    console.log("Transaction confirmed!");
-
-}
-
-/**
- * @param signer
- * @param params canoe params 
- * @param Rainbow rainbow contract instance
- * @param txType determine what kind of tx we are doing
- * @param market optionally specify explicit aggregator
- * @returns txData to execute the transaction
- */
-/**
- export const constructCanoeSwap_old = async (
-    signer: Signer,
-    params: canoeParams,
-    Rainbow: RainbowRouter,
-    txType: RainbowTxType,
-    market?: MarketId
-) => {
-
-    //if market is defined, get the quote with this market
-    if (market != undefined) {
-        //get quote
-        const digest: SwapQuoteResponse = await getRawCanoeQuote(MarketId.KYBERSWAP, params) as SwapQuoteResponse
-        console.log(digest)
-
-        if (!(digest && digest.candidateTrade && digest.candidateTrade.data && digest.candidateTrade.to)) {
-            console.error("Invalid API response structure:", digest);
-            throw new Error("Invalid data from Canoe API");
+    try {
+        let SimResult: SimResult = {
+            success: false,
+            market: market,
+            txData: "0x"
         }
 
-        //format input amount
-        const inputAmount = parseUnits(digest.inAmount, digest.inToken.decimals);
-        console.log("input amount: ", inputAmount)
-
-        //construct warrant
-        const swapCallDataHash = keccak256(digest.candidateTrade.data);
-        const dataHash = keccak256(
-            AbiCoder.defaultAbiCoder().encode(
-                ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-                [digest.inToken.address, digest.outToken.address, digest.candidateTrade.to, swapCallDataHash, inputAmount, 0n ]
-            )
-        );
-
-        //use timestamp from api response
-        const clientCurrentTimeSec = Math.floor(Date.now() / 1000)//digest.timestamp;
-        const warrantValidAfter = BigInt(clientCurrentTimeSec - 300); // 5 minutes ago
-        const warrantValidBefore = BigInt(clientCurrentTimeSec + 3600); // 1 hour from now
-        console.log("test time: ", Math.floor(Date.now() / 1000))
-        console.log("RESP time: ", clientCurrentTimeSec)
-
-        const warrantNonce = BigInt(await signer.getNonce())
-        //const warrantNonce: bigint = 1n;
-
-        const verifyingSignerAddress: string = await signer.getAddress();
-        const packedValidationData = warrantNonce | (warrantValidBefore << 160n) | (warrantValidAfter << 208n);
-
-        //get domain
-        const name = await Rainbow.name()
-        const version = await Rainbow.version()
-
-        const warrantDomain = {
-            name: name,
-            version: version,
-            chainId: digest.chainId,
-            verifyingContract: await Rainbow.getAddress(),
-        };
-
-        const warrantTypes = {
-            CanoeWarrant: [
-                { name: 'packedValidationData', type: 'uint256' },
-                { name: 'dataHash', type: 'bytes32' },
-            ],
-        };
-
-        const warrantValueToSign = {
-            packedValidationData: packedValidationData,
-            dataHash: dataHash,
-        };
-
-        const warrantSignature = await signer.signTypedData(warrantDomain, warrantTypes, warrantValueToSign);
-
-        const warrant = {
-            nonce: warrantNonce,
-            validBefore: warrantValidBefore,
-            validAfter: warrantValidAfter,
-            verifyingSigner: verifyingSignerAddress,
-            signature: warrantSignature,
-        };
-
-        //generate permit signature
-        const permitData = await generatePermitSignature(
-            signer,
-            digest.chainId,
-            digest.inToken.address,
-            inputAmount,
-            await Rainbow.getAddress()
-        );
-
-
-        //simulate swap
-        if (txType == RainbowTxType.TOKEN2TOKEN_PERMIT) {
-
-            
-            //fillQuoteTokenToTokenWithPermit
-            console.log("token to token")
-            const result = await Rainbow.connect(signer)["fillQuoteTokenToTokenWithPermit"].staticCall(
+        if (txType === RainbowTxType.TOKEN2TOKEN_PERMIT) {
+            //format permit data 
+            const permitData = await generatePermitSignature(
+                signer,
+                chainId,
                 digest.inToken.address,
-                digest.outToken.address,
-                digest.candidateTrade.to,
-                digest.candidateTrade.data,
-                inputAmount,
-                0n,
-                permitData,
-                warrant
-            )
-            console.log("Result: ")
-            console.log(result)
-             
+                inputAmount,        // Raw BigInt amount
+                RainbwoDomainInfo.address
+            );
 
-            console.log("CALLING")
-
-            await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
+            //simulate tx, this will revert if the inputs are bad
+            await Rainbow.connect(signer)["fillQuoteTokenToTokenWithPermit"].staticCall(
                 digest.inToken.address,
                 digest.outToken.address,
                 digest.candidateTrade.to,
@@ -419,21 +340,105 @@ export const constructCanoeSwap = async (
                 warrant
             )
 
-            console.log("DONE")
+            //generate tx data so we can send the tx since it did not revert if we have reached this point
+            const txData = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit.populateTransaction(
+                digest.inToken.address,
+                digest.outToken.address,
+                digest.candidateTrade.to,
+                digest.candidateTrade.data,
+                inputAmount,
+                0n,
+                permitData,
+                warrant
+            )
 
-        } else if (txType == RainbowTxType.ETH2TOKEN) {
-
-        } else if (txType == RainbowTxType.TOKEN2ETH) {
-
-        } else if (txType == RainbowTxType.TOKEN2ETH_PERMIT) {
-
-        } else if (txType == RainbowTxType.TOKEN2TOKEN) {
-
-        } else {
-            console.error("Invalid Tx Type")
+            SimResult.success = true
+            SimResult.txData = txData.data
         }
 
+        if (txType === RainbowTxType.TOKEN2ETH_PERMIT) {
+            //format permit data 
+            const permitData = await generatePermitSignature(
+                signer,
+                chainId,
+                digest.inToken.address,
+                inputAmount,        // Raw BigInt amount
+                RainbwoDomainInfo.address
+            );
 
+            //simulate tx, this will revert if the inputs are bad
+            await Rainbow.connect(signer)["fillQuoteTokenToEthWithPermit"].staticCall(
+                digest.inToken.address,
+                digest.candidateTrade.to,
+                digest.candidateTrade.data,
+                inputAmount,
+                0n,
+                permitData,
+                warrant
+            )
+
+            //generate tx data so we can send the tx since it did not revert if we have reached this point
+            const txData = await Rainbow.connect(signer).fillQuoteTokenToEthWithPermit.populateTransaction(
+                digest.inToken.address,
+                digest.candidateTrade.to,
+                digest.candidateTrade.data,
+                inputAmount,
+                0n,
+                permitData,
+                warrant
+            )
+
+            SimResult.success = true
+            SimResult.txData = txData.data
+        }
+        if (SimResult.success) {
+            console.log("SUCCESS WITH ", market)
+        }
+        return SimResult
+
+    } catch (error: any) {
+        console.error("TRANSACTION SIMULATION FAILED or error during preparation.");
+        if (error.code) {
+            console.error(`Error Code: ${error.code}`); // E.g., CALL_EXCEPTION, UNPREDICTABLE_GAS_LIMIT
+        }
+
+        if (error.reason) {
+            console.error(`Revert Reason (from error.reason): ${error.reason}`);
+        }
+
+        if (error.data && error.data !== "0x") {
+            //console.error(`Revert Data (from error.data): ${error.data}`);
+            try {
+                const decodedError = Rainbow.interface.parseError(error.data);
+                if (decodedError) {
+                    console.error(`Decoded Custom Error: ${decodedError.name}(${decodedError.args.join(', ')})`);
+                } else {
+                    if (error.data.startsWith("0x08c379a0")) {
+                        const reasonString = AbiCoder.defaultAbiCoder().decode(['string'], '0x' + error.data.substring(10))[0];
+                        console.error(`Decoded string revert reason: ${reasonString}`);
+                    } else {
+                        console.error("Could not decode error data using RainbowRouter interface, or it's not a custom error.");
+                    }
+                }
+            } catch (parseErr) {
+                console.error("Failed to parse error data:", parseErr);
+            }
+        }
+
+        // If the error object has a 'transaction' or 'receipt' property (less common for staticCall errors but possible)
+        if (error.transaction) {
+            console.error("Associated transaction (if any):", error.transaction);
+        }
+
+        let readyTx: SimResult = {
+            success: false,
+            market: market,
+            txData: "0x"
+        }
+
+        return readyTx
     }
+
+
+
 }
- */

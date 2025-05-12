@@ -9,6 +9,9 @@ import "../libraries/CanoeHelper.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
+//testing
+import "hardhat/console.sol";
+
 /// @title Rainbow base aggregator contract
 contract BaseAggregator is EIP712 {
     /// @dev Used to prevent re-entrancy
@@ -379,7 +382,6 @@ contract BaseAggregator is EIP712 {
         uint256 feeAmount,
         CanoeHelper.Warrant calldata warrant
     ) internal {
-       
         CanoeHelper.verifyWarrant(
             _domainSeparatorV4(),
             keccak256(
@@ -417,11 +419,16 @@ contract BaseAggregator is EIP712 {
             sellAmount - feeAmount
         );
 
+        //console.log("SENDING TX: ");
+
         // 4 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees.
         (bool success, bytes memory res) = target.call{value: msg.value}(
             swapCallData
         );
+
+        //console.log("TX SENT: ", success);
+        //console.log("Tokens Received: ", IERC20(buyTokenAddress).balanceOf(address(this)) - initialOutputTokenAmount);
 
         // Get the revert message of the call and revert with it if the call failed
         if (!success) {
@@ -442,6 +449,7 @@ contract BaseAggregator is EIP712 {
         uint256 finalOutputTokenAmount = IERC20(buyTokenAddress).balanceOf(
             address(this)
         );
+
         require(initialOutputTokenAmount < finalOutputTokenAmount, "NO_TOKENS");
 
         // 7 - Send tokens to the user
