@@ -10,7 +10,7 @@ import { canoeParams, constructCanoeSwap, MarketId, RainbowTxType, RainbwoDomain
 
 const { ethers } = require("hardhat");
 
-let RainbowAddress = "0xC8d2b5e0E28946AF983CECa6966f9def2c9A913F"
+let RainbowAddress = "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A"//"0xC8d2b5e0E28946AF983CECa6966f9def2c9A913F"
 const RAINBOW_ROUTER_EIP712_NAME = "Rainbow Router";
 const RAINBOW_ROUTER_EIP712_VERSION = "1.0";
 

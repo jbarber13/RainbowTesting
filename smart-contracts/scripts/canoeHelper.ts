@@ -12,18 +12,18 @@ import { generatePermitSignature } from "./msc";
 type AnyObject = Record<string, any>;
 
 
-interface BridgeInfo {
+export interface BridgeInfo {
     sourceChainId?: number;
     destinationChainId?: number;
     tokenAddressOnSource?: string;
     tokenAddressOnDestination?: string;
 }
 
-interface TokenExtensions {
+export interface TokenExtensions {
     bridgeInfo?: BridgeInfo | AnyObject;
 }
 
-interface Token {
+export interface Token {
     chainId: number;
     address: string;
     name: string;
@@ -33,30 +33,30 @@ interface Token {
     extensions?: TokenExtensions;
     price?: number;
 }
-interface Fees {
+export interface Fees {
     gas: string;
 }
 
 
-interface RawCouponData {
+export interface RawCouponData {
     executionInformation: AnyObject;
     routeSummary: AnyObject;
 }
 
-interface Coupon {
+export interface Coupon {
     chainId: number;
     account: string;
     raw: RawCouponData;
 }
 
-interface CandidateTrade {
+export interface CandidateTrade {
     chainId: number;
     data: string;
     to: string;
     value: string;
 }
 
-interface SwapQuoteResponse {
+export interface SwapQuoteResponse {
     inAmount: string;
     outAmount: string;
     slippage: number;
