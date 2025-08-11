@@ -28,7 +28,7 @@ library CanoeHelper {
             (uint256(validAfter) << (160 + 48));
     }
 
-    // --- Core Verification Logic (Corrected EIP-712 Digest Calculation) ---
+    // --- Core Verification Logic ---
     function verifyWarrant(
         bytes32 domainSeparator, 
         bytes32 dataHash,

@@ -12,6 +12,12 @@ import { generatePermitSignature } from "./msc";
 type AnyObject = Record<string, any>;
 
 
+
+
+
+
+
+
 export interface BridgeInfo {
     sourceChainId?: number;
     destinationChainId?: number;
