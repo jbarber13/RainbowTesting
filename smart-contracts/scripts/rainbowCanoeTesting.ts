@@ -52,8 +52,10 @@ async function main() {
                 },
             ],
         });
+        
         const blockNumber = await ethers.provider.getBlockNumber();
-        console.log(`Reset to OP fork, block number: ${blockNumber}`);
+        const chainId = (await ethers.provider.getNetwork()).chainId;
+        console.log(`Reset to OP fork, block number: ${blockNumber}, chainId: ${chainId}`);
         
         const signers = await ethers.getSigners()
         testSigner = signers[0] // Use Hardhat's first signer (has known private key)
@@ -219,7 +221,16 @@ const testRainbowCanoeFlow = async () => {
             console.log("  - Warrant nonce:", rainbowExecution.warrant.nonce)
             console.log("  - Warrant validBefore:", rainbowExecution.warrant.validBefore)
             console.log("  - Warrant validAfter:", rainbowExecution.warrant.validAfter)
+            console.log("  - Warrant signature:", rainbowExecution.warrant.signature)
             console.log("  - Warrant signature length:", rainbowExecution.warrant.signature?.length || 'undefined')
+            
+            // Log warrant typed data if available
+            if (rainbowExecution.warrantTypedData) {
+                console.log("🔍 Warrant Typed Data from API:")
+                console.log("  - Domain:", JSON.stringify(rainbowExecution.warrantTypedData.domain, null, 2))
+                console.log("  - Message:", JSON.stringify(rainbowExecution.warrantTypedData.message, null, 2))
+                console.log("  - Types:", JSON.stringify(rainbowExecution.warrantTypedData.types, null, 2))
+            }
         }
         
         // Apply warrant bypass for testing (zero address signer)
@@ -332,6 +343,45 @@ const testRainbowCanoeFlow = async () => {
         
         // Step 4: Prepare and execute the swap
         console.log("\n💫 Step 4: Executing Rainbow Router swap...")
+        
+        // Debug: Decode and log the transaction parameters for dataHash verification
+        console.log("\n🔍 DEBUGGING TRANSACTION PARAMETERS FOR DATAHASH:")
+        try {
+            const rainbowInterface = RainbowRouter__factory.createInterface()
+            const decoded = rainbowInterface.parseTransaction({ data: trade.data })
+            
+            if (decoded?.name === "fillQuoteTokenToToken") {
+                const [sellToken, buyToken, target, swapCallData, sellAmount, feeAmount, warrant] = decoded.args
+                
+                console.log("📋 Contract Function Parameters:")
+                console.log("  - sellToken:", sellToken)
+                console.log("  - buyToken:", buyToken)
+                console.log("  - target:", target)
+                console.log("  - swapCallData length:", swapCallData.length)
+                console.log("  - sellAmount:", sellAmount.toString())
+                console.log("  - feeAmount:", feeAmount.toString())
+                console.log("  - warrant.verifyingSigner:", warrant.verifyingSigner)
+                
+                // Calculate expected dataHash using contract's logic
+                const swapCallDataHash = ethers.keccak256(swapCallData)
+                const expectedDataHash = ethers.keccak256(
+                    ethers.AbiCoder.defaultAbiCoder().encode(
+                        ["address", "address", "address", "bytes32", "uint256", "uint256"],
+                        [sellToken, buyToken, target, swapCallDataHash, sellAmount, feeAmount]
+                    )
+                )
+                
+                console.log("🔍 DataHash Comparison:")
+                console.log("  - Backend dataHash:", rainbowExecution.warrantTypedData?.message?.dataHash || 'not available')
+                console.log("  - Expected dataHash:", expectedDataHash)
+                console.log("  - DataHashes match:", (rainbowExecution.warrantTypedData?.message?.dataHash || '').toLowerCase() === expectedDataHash.toLowerCase())
+            } else {
+                console.log("📋 Unknown function:", decoded?.name)
+            }
+        } catch (error) {
+            console.log("❌ Could not decode transaction data:", error)
+        }
+        
         let finalTradeData = trade.data
         if (bypass && rainbowExecution.warrant) {
             console.log("🔧 Rebuilding transaction with warrant bypass...")
