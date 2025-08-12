@@ -178,7 +178,7 @@ const testRainbowCanoeFlow = async () => {
         slippage: 5,
     };
 
-    console.log(`💱 Swapping ${inputAmount} USDC → WETH via Rainbow Router`)
+    console.log(`💱 Swapping ${inputAmount} USDC → WETH via Rainbow Router (ODOS backend)`)
     console.log(`👤 Account: ${testAddress}`)
     
     // Get initial balances
@@ -189,9 +189,9 @@ const testRainbowCanoeFlow = async () => {
     console.log(`  WETH: ${formatUnits(initialWethBalance, 18)}`)
 
     try {
-        // Step 1: Get Paraswap quote with coupon
-        console.log("\n1. Getting Paraswap quote...")
-        const quoteResponse: SwapQuoteResponse = await getParaswapQuote(params)
+        // Step 1: Get 1inch quote with coupon
+        console.log("\n1. Getting ODOS quote...")
+        const quoteResponse: SwapQuoteResponse = await get1inchQuote(params)
         
         if (!quoteResponse || !quoteResponse.coupon) {
             throw new Error("Failed to get valid quote response")
@@ -216,10 +216,26 @@ const testRainbowCanoeFlow = async () => {
         
         console.log("✅ Rainbow execution prepared")
         
+        // Debug the response structure
+        console.log("🔍 Rainbow execution structure:")
+        console.log("  - Keys:", Object.keys(rainbowExecution))
+        console.log("  - Has warrant:", !!rainbowExecution.warrant)
+        if (rainbowExecution.warrant) {
+            console.log("  - Warrant keys:", Object.keys(rainbowExecution.warrant))
+            console.log("  - Original signer:", rainbowExecution.warrant.verifyingSigner)
+        }
+        
         // Apply warrant bypass for testing (zero address signer)
         if (bypass) {
-            console.log("🔧 Applying warrant bypass (zero address signer)")
-            rainbowExecution.warrant.verifyingSigner = ZERO_ADDRESS
+            if (!rainbowExecution.warrant) {
+                console.log("⚠️  ODOS backend doesn't return warrant data - this DEX may not use the warrant system")
+                console.log("🔧 Skipping warrant bypass (not needed for this DEX)")
+            } else {
+                console.log("🔧 Applying warrant bypass (zero address signer)")
+                console.log("  Original signer:", rainbowExecution.warrant.verifyingSigner)
+                rainbowExecution.warrant.verifyingSigner = ZERO_ADDRESS
+                console.log("  ✅ Overridden with zero address:", ZERO_ADDRESS)
+            }
         }
         
         // Check if we have trade data in either format
@@ -238,21 +254,30 @@ const testRainbowCanoeFlow = async () => {
         
         await ensureTargetIsWhitelisted(contractOwner, targetAddress)
         
-        // Step 4: Check and whitelist signer if needed
-        console.log("\n4. Checking signer authorization...")
-        const signerAddress = bypass ? ZERO_ADDRESS : rainbowExecution.warrant.verifyingSigner
-        console.log(`Signer to check: ${signerAddress}${bypass ? ' (zero address for bypass)' : ' (original warrant signer)'}`)
+        // Step 4: Check and whitelist signer if needed (only if warrant exists)
+        if (rainbowExecution.warrant) {
+            console.log("\n4. Checking signer authorization...")
+            const signerAddress = bypass ? ZERO_ADDRESS : rainbowExecution.warrant.verifyingSigner
+            console.log(`Signer to check: ${signerAddress}${bypass ? ' (zero address for bypass)' : ' (original warrant signer)'}`)
+            
+            await ensureSignerIsWhitelisted(contractOwner, signerAddress)
+        } else {
+            console.log("\n4. Skipping signer authorization (no warrant system for this DEX)")
+        }
         
-        await ensureSignerIsWhitelisted(contractOwner, signerAddress)
-        
-        // Step 4.5: Verify warrant signer is actually whitelisted in contract
-        console.log("\n4.5. Verifying warrant signer is whitelisted in contract...")
-        const isWarrantSignerWhitelisted = await Rainbow.validSigners(signerAddress)
-        console.log(`✅ Contract validSigners[${signerAddress}] (warrant signer): ${isWarrantSignerWhitelisted}`)
-        
-        if (!isWarrantSignerWhitelisted) {
-            console.error("❌ CRITICAL: Warrant signer is NOT whitelisted in contract!")
-            throw new Error(`Warrant signer ${signerAddress} is not whitelisted in contract`)
+        // Step 4.5: Verify warrant signer is actually whitelisted in contract (only if warrant exists)
+        if (rainbowExecution.warrant) {
+            console.log("\n4.5. Verifying warrant signer is whitelisted in contract...")
+            const signerAddress = bypass ? ZERO_ADDRESS : rainbowExecution.warrant.verifyingSigner
+            const isWarrantSignerWhitelisted = await Rainbow.validSigners(signerAddress)
+            console.log(`✅ Contract validSigners[${signerAddress}] (warrant signer): ${isWarrantSignerWhitelisted}`)
+            
+            if (!isWarrantSignerWhitelisted) {
+                console.error("❌ CRITICAL: Warrant signer is NOT whitelisted in contract!")
+                throw new Error(`Warrant signer ${signerAddress} is not whitelisted in contract`)
+            }
+        } else {
+            console.log("\n4.5. Skipping warrant signer verification (no warrant system for this DEX)")
         }
         
         // Step 4.6: Check if test signer (for EIP-2612 permits) is also whitelisted
@@ -282,12 +307,14 @@ const testRainbowCanoeFlow = async () => {
             console.log("\n4.7. Skipping ERC20 approval (usePermit = true, using permits)")
         }
         
-        // Step 5: Prepare and execute the swap
-        console.log("\n💫 Step 5: Executing Rainbow Router swap...")
+        // Step 4: Prepare and execute the swap
+        console.log("\n💫 Step 4: Executing Rainbow Router swap...")
         let finalTradeData = trade.data
-        if (bypass) {
+        if (bypass && rainbowExecution.warrant) {
             console.log("🔧 Rebuilding transaction with warrant bypass...")
             finalTradeData = rebuildTransactionDataWithModifiedWarrant(trade.data, rainbowExecution.warrant)
+        } else if (bypass) {
+            console.log("🔧 No warrant reconstruction needed (DEX doesn't use warrants)")
         }
         
         const modifiedTrade = { ...trade, data: finalTradeData }
@@ -324,15 +351,15 @@ const testRainbowCanoeFlow = async () => {
     }
 }
 
-const getParaswapQuote = async (params: canoeParams): Promise<SwapQuoteResponse> => {
-    const baseURL = `http://localhost:3333/market/paraswap/swap_quote`
+const get1inchQuote = async (params: canoeParams): Promise<SwapQuoteResponse> => {
+    const baseURL = `http://localhost:3333/market/odos/swap_quote`
     
     try {
-        console.log("Fetching Paraswap quote from:", baseURL)
+        console.log("Fetching ODOS quote from:", baseURL)
         const response = await axios.post(baseURL, params)
         return response.data as SwapQuoteResponse
     } catch (error: any) {
-        console.error("Error fetching Paraswap quote:")
+        console.error("Error fetching ODOS quote:")
         if (axios.isAxiosError(error)) {
             console.error("Status:", error.response?.status)
             console.error("Response Data:", error.response?.data)
@@ -344,7 +371,7 @@ const getParaswapQuote = async (params: canoeParams): Promise<SwapQuoteResponse>
 }
 
 const getRainbowExecution = async (coupon: Coupon): Promise<RainbowExecutionInfo> => {
-    const baseURL = `http://localhost:3333/market/paraswap/execution_information`
+    const baseURL = `http://localhost:3333/market/odos/execution_information`
     
     // Build the request body according to ExecutionRequest interface
     const requestBody: ExecutionRequest = {
@@ -398,7 +425,11 @@ const simulateRainbowTransaction = async (
 ) => {
     const { to, data, value } = trade
     const warrant = rainbowExecution.warrant
-    console.log("Warrant Signer: ", warrant.verifyingSigner)
+    if (warrant) {
+        console.log("Warrant Signer: ", warrant.verifyingSigner)
+    } else {
+        console.log("No warrant (DEX doesn't use warrant system)")
+    }
     
     // Ensure we have enough tokens for the test
     const inputAmountBN = parseUnits(originalQuote.inAmount, originalQuote.inToken.decimals)
