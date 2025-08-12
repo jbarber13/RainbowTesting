@@ -108,10 +108,22 @@ async function main() {
         console.log("Impersonated contract owner:", ownerAddr)
         
     } else {
-        console.log("DEPLOYING TO LIVE NETWORK: ", networkName,)
-        const provider = new ethers.JsonRpcProvider(process.env.OP_URL!)
-        testSigner = new ethers.Wallet(process.env.MAINNET_PRIVATE_KEY!, provider)
-        contractOwner = new ethers.Wallet(process.env.MAINNET_PRIVATE_KEY!, provider)
+        console.log("RUNNING ON LIVE NETWORK: ", networkName)
+        // On live networks, use the provided signer (should be the testing account)
+        const signers = await ethers.getSigners()
+        testSigner = signers[0]
+        contractOwner = signers[0] // Same account for both roles on live network
+        
+        const testAddress = await testSigner.getAddress()
+        console.log("Using account:", testAddress)
+        
+        // Verify this is the expected testing account
+        if (testAddress.toLowerCase() !== ownerAddr.toLowerCase()) {
+            console.warn(`⚠️  Warning: Expected testing account ${ownerAddr}, got ${testAddress}`)
+            console.warn(`⚠️  Make sure you're using the correct account with real funds and ownership`)
+        } else {
+            console.log(`✅ Using expected testing account with ownership and funds`)
+        }
     }
 
     // Initialize token contracts
@@ -119,8 +131,26 @@ async function main() {
     WETH = IERC20__factory.connect("0x4200000000000000000000000000000000000006", testSigner)
     
     // Fund the test signer with USDC (only on fork)
-    if (networkName == "hardhat" || networkName == "localhost") {
+    if (!mainnet) {
         await fundTestAccountWithUSDC()
+    } else {
+        console.log("📍 Running on live network - skipping test funding (using real account with real funds)")
+        
+        // Check current balances on live network
+        const testAddress = await testSigner.getAddress()
+        const usdcBalance = await USDC.balanceOf(testAddress)
+        const wethBalance = await WETH.balanceOf(testAddress)
+        
+        console.log(`💰 Live account balances:`);
+        console.log(`  USDC: ${formatUnits(usdcBalance, 6)}`);
+        console.log(`  WETH: ${formatUnits(wethBalance, 18)}`);
+        
+        // Check if we have enough USDC for the test
+        const requiredAmount = parseUnits("5", 6) // 5 USDC
+        if (usdcBalance < requiredAmount) {
+            console.error(`❌ Insufficient USDC balance for test. Need: ${formatUnits(requiredAmount, 6)} USDC, Have: ${formatUnits(usdcBalance, 6)} USDC`);
+            throw new Error("Insufficient USDC balance on live network");
+        }
     }
 
     await testRainbowCanoeFlow()
@@ -252,7 +282,9 @@ const testRainbowCanoeFlow = async () => {
         const targetAddress = extractTargetFromRainbowData(trade.data)
         console.log(`Target to check: ${targetAddress}`)
         
-        await ensureTargetIsWhitelisted(contractOwner, targetAddress)
+        // On live networks, only the testing account has owner privileges
+        const authSigner = mainnet ? testSigner : contractOwner
+        await ensureTargetIsWhitelisted(authSigner, targetAddress)
         
         // Step 4: Check and whitelist signer if needed (only if warrant exists)
         if (rainbowExecution.warrant) {
@@ -260,7 +292,9 @@ const testRainbowCanoeFlow = async () => {
             const signerAddress = bypass ? ZERO_ADDRESS : rainbowExecution.warrant.verifyingSigner
             console.log(`Signer to check: ${signerAddress}${bypass ? ' (zero address for bypass)' : ' (original warrant signer)'}`)
             
-            await ensureSignerIsWhitelisted(contractOwner, signerAddress)
+            // On live networks, only the testing account has owner privileges
+            const authSigner = mainnet ? testSigner : contractOwner
+            await ensureSignerIsWhitelisted(authSigner, signerAddress)
         } else {
             console.log("\n4. Skipping signer authorization (no warrant system for this DEX)")
         }
@@ -288,7 +322,9 @@ const testRainbowCanoeFlow = async () => {
         
         if (!isTestSignerWhitelisted) {
             console.log("❌ Test signer not whitelisted for EIP-2612 permits. Adding to whitelist...")
-            await ensureSignerIsWhitelisted(contractOwner, testAddress)
+            // On live networks, only the testing account has owner privileges
+            const authSigner = mainnet ? testSigner : contractOwner
+            await ensureSignerIsWhitelisted(authSigner, testAddress)
             
             // Verify it was added
             const nowWhitelisted = await Rainbow.validSigners(testAddress)
@@ -318,7 +354,7 @@ const testRainbowCanoeFlow = async () => {
         }
         
         const modifiedTrade = { ...trade, data: finalTradeData }
-        await simulateRainbowTransaction(testSigner, modifiedTrade, rainbowExecution, quoteResponse)
+        await executeRainbowTransaction(testSigner, modifiedTrade, rainbowExecution, quoteResponse)
         
         // Get final balances and calculate changes
         const finalUsdcBalance = await USDC.balanceOf(testAddress)
@@ -417,7 +453,7 @@ const getRainbowExecution = async (coupon: Coupon): Promise<RainbowExecutionInfo
     }
 }
 
-const simulateRainbowTransaction = async (
+const executeRainbowTransaction = async (
     txSigner: Signer, 
     trade: any,
     rainbowExecution: RainbowExecutionInfo, 
@@ -471,12 +507,23 @@ const simulateRainbowTransaction = async (
         
         let result: string = ""
         let gasEstimate: bigint = BigInt(0)
+        let tx: any
+        let receipt: any
         
         try {
             // Simulate the transaction using staticCall
             result = await txSigner.provider!.call(txRequest)
             gasEstimate = await txSigner.provider!.estimateGas(txRequest)
             console.log(`✅ Swap simulation successful! Estimated gas: ${gasEstimate.toLocaleString()}`)
+            
+            // If simulation succeeds, execute the actual transaction
+            console.log(`\n🚀 Executing actual swap transaction...`)
+            tx = await txSigner.sendTransaction(txRequest)
+            console.log(`📤 Transaction sent: ${tx.hash}`)
+            
+            receipt = await tx.wait()
+            console.log(`✅ Transaction confirmed in block ${receipt!.blockNumber}`)
+            console.log(`⛽ Gas used: ${receipt!.gasUsed.toLocaleString()}`)
             
         } catch (innerError: any) {
             console.log("\n🔍 ANALYZING TRANSACTION FAILURE...")
@@ -520,11 +567,14 @@ const simulateRainbowTransaction = async (
         return {
             success: true,
             result: result,
-            gasEstimate: gasEstimate.toString()
+            gasEstimate: gasEstimate.toString(),
+            txHash: tx.hash,
+            blockNumber: receipt!.blockNumber,
+            gasUsed: receipt!.gasUsed.toString()
         }
         
     } catch (error: any) {
-        console.error("❌ Transaction simulation failed:")
+        console.error("❌ Transaction execution failed:")
         console.error("Error:", error.message)
         if (error.data) {
             console.error("Error data:", error.data)
