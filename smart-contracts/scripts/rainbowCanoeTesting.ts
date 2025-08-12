@@ -10,48 +10,9 @@ import axios from "axios";
 const RAINBOW_ROUTER_EIP712_NAME = "Rainbow Router";
 const RAINBOW_ROUTER_EIP712_VERSION = "1.0";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const bypass = true;
+const BACKEND_WARRANT_SIGNER = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"; // Backend service warrant signer
+const bypass = false;
 const usePermit = false;
-
-/**
- I can see your backend improvements are working! The transformation is definitely happening correctly:
-
-  ✅ Backend Transformation is Working Perfectly!
-
-  Looking at the logs, I can confirm:
-
-  1. ✅ Correct Target: trade.to is 0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A (Rainbow Router)
-  2. ✅ Has Warrant: Complete warrant structure with signature
-  3. ✅ Proper Response Structure: {executionInformation, warrant, warrantTypedData}
-  4. ✅ Real Data: Using actual token addresses and amounts
-  5. ✅ New DataHash: 0xb692fe531a3fc16e3f24e6c1e9aa3eb0237c181c0fe0494500632c5622a56aa4 (shows real
-  calculation)
-
-  🔍 Still Getting CANOE: INVALID_SIGNATURE
-
-  However, we're still getting the signature validation error. Since the transformation is working correctly,
-  this suggests the signature itself is valid but the contract is calculating a different dataHash than your
-  backend.
-
-  🎯 Key Questions for Server Logs
-
-  Can you check if you're seeing these debug logs in your server console:
-
-  1. 🔍 Full coupon structure: - Complete coupon data
-  2. 🔍 Token addresses for warrant: - inToken/outToken addresses used
-  3. 🔍 Input amount for warrant: - Amount used in calculation
-  4. 🔏 Warrant Signature Debug: - Backend's calculation details
-
-  💡 Likely Remaining Issue
-
-  The dataHash calculation might have subtle differences between:
-  - Backend calculation: Using extracted token addresses/amounts
-  - Contract calculation: Using the actual transaction data
-
-  Your backend fix is working perfectly for the transformation! We just need to align the dataHash calculation
-   between backend and contract. What do your server logs show for the warrant calculation details?
- */
-
 
 // Using RainbowExecutionInfo from canoeInterface.ts
 
@@ -252,7 +213,13 @@ const testRainbowCanoeFlow = async () => {
         console.log("  - Has warrant:", !!rainbowExecution.warrant)
         if (rainbowExecution.warrant) {
             console.log("  - Warrant keys:", Object.keys(rainbowExecution.warrant))
-            console.log("  - Original signer:", rainbowExecution.warrant.verifyingSigner)
+            console.log("  - Warrant verifyingSigner from API:", rainbowExecution.warrant.verifyingSigner)
+            console.log("  - Expected backend signer:", BACKEND_WARRANT_SIGNER)
+            console.log("  - Signers match:", rainbowExecution.warrant.verifyingSigner.toLowerCase() === BACKEND_WARRANT_SIGNER.toLowerCase())
+            console.log("  - Warrant nonce:", rainbowExecution.warrant.nonce)
+            console.log("  - Warrant validBefore:", rainbowExecution.warrant.validBefore)
+            console.log("  - Warrant validAfter:", rainbowExecution.warrant.validAfter)
+            console.log("  - Warrant signature length:", rainbowExecution.warrant.signature?.length || 'undefined')
         }
         
         // Apply warrant bypass for testing (zero address signer)
@@ -332,6 +299,26 @@ const testRainbowCanoeFlow = async () => {
             
             if (!nowWhitelisted) {
                 throw new Error(`Failed to whitelist test signer ${testAddress} for EIP-2612 permits`)
+            }
+        }
+        
+        // Step 4.65: Check if backend warrant signer is whitelisted
+        console.log("\n4.65. Verifying backend warrant signer is whitelisted...")
+        const isBackendSignerWhitelisted = await Rainbow.validSigners(BACKEND_WARRANT_SIGNER)
+        console.log(`✅ Contract validSigners[${BACKEND_WARRANT_SIGNER}] (backend warrant signer): ${isBackendSignerWhitelisted}`)
+        
+        if (!isBackendSignerWhitelisted) {
+            console.log("❌ Backend warrant signer not whitelisted. Adding to whitelist...")
+            // On live networks, only the testing account has owner privileges
+            const authSigner = mainnet ? testSigner : contractOwner
+            await ensureSignerIsWhitelisted(authSigner, BACKEND_WARRANT_SIGNER)
+            
+            // Verify it was added
+            const nowWhitelistedBackend = await Rainbow.validSigners(BACKEND_WARRANT_SIGNER)
+            console.log(`✅ Contract validSigners[${BACKEND_WARRANT_SIGNER}] (after whitelisting): ${nowWhitelistedBackend}`)
+            
+            if (!nowWhitelistedBackend) {
+                throw new Error(`Failed to whitelist backend warrant signer ${BACKEND_WARRANT_SIGNER}`)
             }
         }
         
