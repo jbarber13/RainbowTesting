@@ -60,7 +60,7 @@ const ownerAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
 const { ethers } = require("hardhat");
 
 const wethAmount = ethers.parseEther("0.01")
-const usdcAmount = ethers.parseUnits("10", 6) // Increased to 10 USDC for better liquidity
+const usdcAmount = ethers.parseUnits("5", 6) // 5 USDC for better test success rate
 
 let testSigner: Signer  // Hardhat signer with known private key
 let contractOwner: Signer  // Impersonated account for contract admin
@@ -175,10 +175,10 @@ const testRainbowCanoeFlow = async () => {
         inTokenAddress: await USDC.getAddress(),
         outTokenAddress: await WETH.getAddress(),
         inTokenAmount: inputAmount.toString(),
-        slippage: 5,
+        slippage: 5000, // 50% slippage tolerance (5000 bips) for testing
     };
 
-    console.log(`💱 Swapping ${inputAmount} USDC → WETH via Rainbow Router (ODOS backend)`)
+    console.log(`💱 Swapping ${inputAmount} USDC → WETH via Rainbow Router (ODOS backend, 50% slippage)`)
     console.log(`👤 Account: ${testAddress}`)
     
     // Get initial balances
