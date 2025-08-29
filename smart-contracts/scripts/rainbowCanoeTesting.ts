@@ -32,7 +32,7 @@ let USDC: IERC20
 let WETH: IERC20
 
 // Known USDC whale on Optimism for funding our test account
-const USDC_WHALE = "0xf89d7b9c864f589bbF53a82105107622B35EaA40" // Binance 8
+const USDC_WHALE = "0xc0E17AD342AFABD36b3971F8305fF147006962ae" 
 
 async function main() {
     console.log("STARTING Rainbow Canoe Testing")
