@@ -6,7 +6,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { ERC20, IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
 import { generatePermitSignature, generateUniTxData, stealMoney } from "./msc";
 import axios from "axios";
-import { canoeParams, constructCanoeSwap, MarketId, RainbowTxType, RainbwoDomainInfo, SimResult } from "./canoeHelper";
+import { canoeParams, constructCanoeSwap, MarketId, RainbowTxType, RainbwoDomainInfo, SimResult } from "../util/canoeHelper";
 
 const { ethers } = require("hardhat");
 

@@ -75,9 +75,6 @@ const config: HardhatUserConfig = {
       accounts: [
         process.env.MAINNET_PRIVATE_KEY
           ? process.env.MAINNET_PRIVATE_KEY
-          : zaddr,
-        process.env.PERSONAL_PRIVATE_KEY
-          ? process.env.PERSONAL_PRIVATE_KEY
           : zaddr
       ],
       minGasPrice: 32000000000,
@@ -87,9 +84,6 @@ const config: HardhatUserConfig = {
       accounts: [
         process.env.MAINNET_PRIVATE_KEY
           ? process.env.MAINNET_PRIVATE_KEY
-          : zaddr,
-        process.env.PERSONAL_PRIVATE_KEY
-          ? process.env.PERSONAL_PRIVATE_KEY
           : zaddr
       ],
       minGasPrice: 32000000000,

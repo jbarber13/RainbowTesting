@@ -30,7 +30,7 @@ export const getNetworkConfig = (networkName: string): NetworkConfig => {
     // Default to Optimism config - can be extended for other networks
     return {
         rainbowAddress: "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A",
-        ownerAddr: "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89",
+        ownerAddr: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0", // Updated: ownership transferred to dev wallet
         usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcWhale: "0xc0E17AD342AFABD36b3971F8305fF147006962ae",
@@ -284,7 +284,7 @@ export const handleERC20Approval = async (signer: Signer, USDC: IERC20, spenderA
     const currentAllowance = await USDC.allowance(signerAddress, spenderAddress);
     console.log(`  Current allowance: ${formatUnits(currentAllowance, 6)} USDC`);
     
-    if (currentAllowance >= amount) {
+    if (currentAllowance >= BigInt(amount.toString())) {
         console.log(`✅ Sufficient allowance already exists`);
         return;
     }
@@ -296,12 +296,12 @@ export const handleERC20Approval = async (signer: Signer, USDC: IERC20, spenderA
         console.log(`📤 Approval transaction sent: ${approveTx.hash}`);
         
         const receipt = await approveTx.wait();
-        console.log(`✅ Approval transaction confirmed in block ${receipt.blockNumber}`);
+        console.log(`✅ Approval transaction confirmed in block ${receipt!.blockNumber}`);
         
         const newAllowance = await USDC.allowance(signerAddress, spenderAddress);
         console.log(`✅ New allowance: ${formatUnits(newAllowance, 6)} USDC`);
         
-        if (newAllowance < amount) {
+        if (newAllowance < BigInt(amount.toString())) {
             throw new Error(`Approval failed: expected ${formatUnits(amount, 6)}, got ${formatUnits(newAllowance, 6)}`);
         }
     } catch (error: any) {
