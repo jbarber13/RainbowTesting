@@ -20,6 +20,7 @@ import { RainbowExecutionInfo } from "./canoeInterface";
 const bypass = false;
 const usePermit = false;
 const testAmount = "5"; // 5 USDC for better test success rate
+const simulateOnly = true
 
 async function main() {
     console.log("STARTING Rainbow Canoe Testing")

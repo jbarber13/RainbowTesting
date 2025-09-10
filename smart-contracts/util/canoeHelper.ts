@@ -59,12 +59,13 @@ export const setupTestEnvironment = async (usePermit: boolean = false, bypass: b
     if (networkName === "hardhat" || networkName === "localhost") {
         mainnet = false;
         
-        // Reset to fork
+        // Reset to fork with recent block
         await network.provider.request({
             method: "hardhat_reset",
             params: [{
                 forking: {
-                    jsonRpcUrl: config.forkUrl
+                    jsonRpcUrl: config.forkUrl,
+                    blockNumber: undefined // Use latest block, or specify a recent block number
                 },
             }],
         });

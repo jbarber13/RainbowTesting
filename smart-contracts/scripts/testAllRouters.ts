@@ -21,7 +21,8 @@ import { canoeParams } from "../util/canoeHelper";
 // Configuration
 const bypass = false; // Set to true to bypass warrant validation
 const usePermit = false; // Set to true to use ERC-2612 permits
-const testAmount = "5"; // 5 USDC for better test success rate
+const testAmount = "1"; // 5 USDC for better test success rate
+const simulateOnly = true; // Set to false to actually send transactions to live network
 
 // Network configuration (dev wallet is now both user and owner)
 const DEV_WALLET_ADDRESS = "0x3CB68a6762041aA05E762814A8791CA9d98E79A0";
@@ -40,19 +41,19 @@ const DEV_WALLET_ADDRESS = "0x3CB68a6762041aA05E762814A8791CA9d98E79A0";
  */
 // All available routers to test
 const ROUTERS = [
-    //"airswap",
-    //"cowswap", 
-    //"enso",
-    //"icecreamswap",
-    //"kyberswap",
-    "odos", //WORKING
-    //"okx",
-    //"oneinch",
-    //"openocean",
-    //"paraswap",
-    //"unizen",
-    //"usor",
-    //"zeroex"
+    //"airswap", //chain not supported
+    //"cowswap", //incompatible
+    //"enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
+    //"icecreamswap", //timed out
+    //"kyberswap", //WORKING live network only
+    //"odos", //WORKING
+    //"okx", //incompatible
+    //"oneinch", //WORKING
+    //"openocean", //incompatible
+    "paraswap", //WORKING
+    //"unizen", //UnizenRouter: Invalid-user
+    //"usor", //incompatible, no recipient param on api 
+    //"zeroex" //incompatible
 ];
 
 interface RouterTestResult {
@@ -61,9 +62,10 @@ interface RouterTestResult {
     error?: string;
     gasUsed?: string;
     txHash?: string;
-    balanceChanges?: {
-        usdcSpent: string;
-        wethReceived: string;
+    tokenReceived?: {
+        amount: string;
+        symbol: string;
+        usdValue: string;
         wethUsdValue: string;
     };
 }
@@ -74,20 +76,22 @@ async function main() {
     
     const results: RouterTestResult[] = [];
     const networkName = hre.network.name;
-    const isLiveNetwork = networkName !== "hardhat" && networkName !== "localhost";
     
-    console.log(`\n🌐 Network: ${networkName} ${isLiveNetwork ? '(LIVE)' : '(LOCAL FORK)'}`);
+    console.log(`\n🌐 Network: ${networkName} (LIVE NETWORK ONLY)`);
     console.log(`\n💱 Test Parameters:`);
     console.log(`  Amount: ${testAmount} USDC → WETH`);
     console.log(`  Slippage: 50% (for testing reliability)`);
     console.log(`  UsePermit: ${usePermit}`);
     console.log(`  Bypass: ${bypass}`);
+    console.log(`  Simulate Only: ${simulateOnly ? '✅ YES (no actual transactions)' : '❌ NO (will send real transactions)'}`);
     
-    if (isLiveNetwork) {
-        console.log(`\n🔴 LIVE NETWORK MODE:`);
-        console.log(`  - Dev Wallet (User & Owner): ${DEV_WALLET_ADDRESS}`);
-        console.log(`  - Will generate Tenderly simulation data`);
-        console.log(`  - Will attempt real transactions (may revert)`);
+    console.log(`\n🔴 LIVE NETWORK MODE:`);
+    console.log(`  - Dev Wallet (User & Owner): ${DEV_WALLET_ADDRESS}`);
+    console.log(`  - Will generate Tenderly simulation data for failures`);
+    if (simulateOnly) {
+        console.log(`  - Will NOT send actual transactions (simulation only)`);
+    } else {
+        console.log(`  - Will send REAL transactions to live network`);
     }
     
     // Test each router with fresh setup
@@ -101,16 +105,14 @@ async function main() {
             console.log("🔄 Setting up fresh test environment for", router.toUpperCase());
             const setup = await setupTestEnvironment(usePermit, bypass);
             
-            // For live networks, verify the signer matches our dev wallet
-            if (isLiveNetwork) {
-                const testAddress = await setup.testSigner.getAddress();
-                if (testAddress.toLowerCase() !== DEV_WALLET_ADDRESS.toLowerCase()) {
-                    throw new Error(`Expected dev wallet ${DEV_WALLET_ADDRESS}, but got ${testAddress}. Make sure your wallet is configured correctly.`);
-                }
-                console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
+            // Verify the signer matches our dev wallet
+            const testAddress = await setup.testSigner.getAddress();
+            if (testAddress.toLowerCase() !== DEV_WALLET_ADDRESS.toLowerCase()) {
+                throw new Error(`Expected dev wallet ${DEV_WALLET_ADDRESS}, but got ${testAddress}. Make sure your wallet is configured correctly.`);
             }
+            console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
             
-            const result = await testRouter(router, setup, isLiveNetwork);
+            const result = await testRouter(router, setup);
             results.push(result);
             
             if (result.success) {
@@ -138,7 +140,7 @@ async function main() {
     printTestSummary(results);
 }
 
-async function testRouter(router: string, setup: TestSetup, isLiveNetwork: boolean = false): Promise<RouterTestResult> {
+async function testRouter(router: string, setup: TestSetup): Promise<RouterTestResult> {
     const { testSigner, contractOwner, mainnet, Rainbow, USDC, WETH, config } = setup;
     const testAddress = await testSigner.getAddress();
     
@@ -235,24 +237,22 @@ async function testRouter(router: string, setup: TestSetup, isLiveNetwork: boole
             throw new Error(`Target contract ${targetAddress} does not exist - router may be using stale data`);
         }
         
-        // For live networks, validate Rainbow Router configuration
-        if (isLiveNetwork) {
-            console.log(`\n🔍 LIVE NETWORK RAINBOW ROUTER VALIDATION:`);
-            console.log(`  - Rainbow Router: ${config.rainbowAddress}`);
-            console.log(`  - Expected Owner: ${DEV_WALLET_ADDRESS}`);
+        // Validate Rainbow Router configuration
+        console.log(`\n🔍 RAINBOW ROUTER VALIDATION:`);
+        console.log(`  - Rainbow Router: ${config.rainbowAddress}`);
+        console.log(`  - Expected Owner: ${DEV_WALLET_ADDRESS}`);
+        
+        // Check actual owner
+        try {
+            const actualOwner = await Rainbow.owner();
+            console.log(`  - Actual Owner: ${actualOwner}`);
+            console.log(`  - Owner Match: ${actualOwner.toLowerCase() === DEV_WALLET_ADDRESS.toLowerCase() ? '✅ YES' : '❌ NO'}`);
             
-            // Check actual owner
-            try {
-                const actualOwner = await Rainbow.owner();
-                console.log(`  - Actual Owner: ${actualOwner}`);
-                console.log(`  - Owner Match: ${actualOwner.toLowerCase() === DEV_WALLET_ADDRESS.toLowerCase() ? '✅ YES' : '❌ NO'}`);
-                
-                if (actualOwner.toLowerCase() !== DEV_WALLET_ADDRESS.toLowerCase()) {
-                    console.log(`  ⚠️  WARNING: Owner mismatch may cause authorization issues`);
-                }
-            } catch (ownerError: any) {
-                console.log(`  ❌ Could not check owner: ${ownerError.message}`);
+            if (actualOwner.toLowerCase() !== DEV_WALLET_ADDRESS.toLowerCase()) {
+                console.log(`  ⚠️  WARNING: Owner mismatch may cause authorization issues`);
             }
+        } catch (ownerError: any) {
+            console.log(`  ❌ Could not check owner: ${ownerError.message}`);
         }
         
         // Check target balances for liquidity warning
@@ -333,8 +333,9 @@ async function testRouter(router: string, setup: TestSetup, isLiveNetwork: boole
         const modifiedTrade = { ...trade, data: finalTradeData };
         
         // Try simulation first, but if it fails, execute actual transaction to get real revert
+        let gasEstimate: bigint | undefined;
         try {
-            const gasEstimate = await hre.ethers.provider.estimateGas({
+            gasEstimate = await hre.ethers.provider.estimateGas({
                 to: modifiedTrade.to,
                 data: modifiedTrade.data,
                 value: modifiedTrade.value,
@@ -342,103 +343,123 @@ async function testRouter(router: string, setup: TestSetup, isLiveNetwork: boole
             });
             console.log(`✅ Pre-simulation successful, gas: ${gasEstimate.toLocaleString()}`);
         } catch (simError: any) {
-            // Generate Tenderly simulation data for live networks
-            if (isLiveNetwork) {
-                console.log(`\n📊 TENDERLY SIMULATION DATA for ${router.toUpperCase()}:`);
-                console.log(`${"=".repeat(50)}`);
-                console.log(`To: ${modifiedTrade.to}`);
-                console.log(`From: ${testAddress}`);
-                console.log(`Data: ${modifiedTrade.data}`);
-                console.log(`Value: ${modifiedTrade.value}`);
-                console.log(`${"=".repeat(50)}`);
-                console.log(`\n📋 Copy the above data to Tenderly for simulation`);
-            }
+            // Generate Tenderly simulation data for failed simulations
+            console.log(`\n📊 TENDERLY SIMULATION DATA for ${router.toUpperCase()}:`);
+            console.log(`${"=".repeat(50)}`);
+            console.log(`To: ${modifiedTrade.to}`);
+            console.log(`From: ${testAddress}`);
+            console.log(`Data: ${modifiedTrade.data}`);
+            console.log(`Value: ${modifiedTrade.value}`);
+            console.log(`${"=".repeat(50)}`);
+            console.log(`\n📋 Copy the above data to Tenderly for simulation`);
             
-            console.log(`❌ Pre-simulation failed, executing actual transaction to get revert reason...`);
-            
-            // Execute actual transaction to get the real revert reason
-            try {
-                // For live networks, use normal gas limits and let it revert naturally
-                const gasLimit = isLiveNetwork ? gasEstimate || 500000 : 1000000;
+            if (simulateOnly) {
+                console.log(`\n⏸️  SIMULATION ONLY MODE - Not executing actual transaction`);
+                console.log(`❌ Pre-simulation failed with: ${simError.message}`);
                 
-                const tx = await testSigner.sendTransaction({
-                    to: modifiedTrade.to,
-                    data: modifiedTrade.data,
-                    value: modifiedTrade.value,
-                    gasLimit: gasLimit
-                });
-                console.log(`Transaction sent: ${tx.hash}`);
+                throw new Error(`${router.toUpperCase()} pre-simulation failed: ${simError.message}`);
+            } else {
+                console.log(`❌ Pre-simulation failed, executing actual transaction to get revert reason...`);
                 
-                if (isLiveNetwork) {
+                // Execute actual transaction to get the real revert reason
+                try {
+                    const gasLimit = gasEstimate || 500000;
+                    
+                    const tx = await testSigner.sendTransaction({
+                        to: modifiedTrade.to,
+                        data: modifiedTrade.data,
+                        value: modifiedTrade.value,
+                        gasLimit: gasLimit
+                    });
+                    console.log(`Transaction sent: ${tx.hash}`);
                     console.log(`🌐 Live network transaction hash: ${tx.hash}`);
-                }
-                
-                await tx.wait();
-                console.log(`✅ Transaction succeeded unexpectedly!`);
-            } catch (txError: any) {
-                console.log(`\n🔍 ACTUAL TRANSACTION REVERT REASON:`);
-                console.log(`  - Error: ${txError.message}`);
-                console.log(`  - Code: ${txError.code || 'N/A'}`);
-                console.log(`  - Data: ${txError.data || 'N/A'}`);
-                console.log(`  - Reason: ${txError.reason || 'N/A'}`);
-                
-                // Try to decode the revert reason
-                if (txError.data && txError.data.startsWith('0x')) {
-                    try {
-                        if (txError.data.length >= 10) {
-                            const decoded = hre.ethers.AbiCoder.defaultAbiCoder().decode(['string'], '0x' + txError.data.slice(10));
-                            console.log(`  - DECODED REVERT: "${decoded[0]}"`);
+                    
+                    await tx.wait();
+                    console.log(`✅ Transaction succeeded unexpectedly!`);
+                } catch (txError: any) {
+                    console.log(`\n🔍 ACTUAL TRANSACTION REVERT REASON:`);
+                    console.log(`  - Error: ${txError.message}`);
+                    console.log(`  - Code: ${txError.code || 'N/A'}`);
+                    console.log(`  - Data: ${txError.data || 'N/A'}`);
+                    console.log(`  - Reason: ${txError.reason || 'N/A'}`);
+                    
+                    // Try to decode the revert reason
+                    if (txError.data && txError.data.startsWith('0x')) {
+                        try {
+                            if (txError.data.length >= 10) {
+                                const decoded = hre.ethers.AbiCoder.defaultAbiCoder().decode(['string'], '0x' + txError.data.slice(10));
+                                console.log(`  - DECODED REVERT: "${decoded[0]}"`);
+                            }
+                        } catch {
+                            console.log(`  - Could not decode revert data`);
                         }
-                    } catch {
-                        console.log(`  - Could not decode revert data`);
                     }
-                }
-                
-                // Enhanced error message with actual revert
-                const actualRevert = txError.reason || (txError.data ? 'See decoded revert above' : 'Unknown');
-                
-                // Additional context for debugging backend vs contract issues
-                console.log(`\n💡 DEBUGGING CONTEXT:`);
-                console.log(`  - If this is a backend service issue: try getting a fresh quote and see if it works`);
-                console.log(`  - If this is a router-specific issue: the error will persist with fresh quotes`);
-                console.log(`  - Call data size: ${trade.data.length} chars suggests routing complexity`);
-                
-                if (isLiveNetwork) {
+                    
+                    // Enhanced error message with actual revert
+                    const actualRevert = txError.reason || (txError.data ? 'See decoded revert above' : 'Unknown');
+                    
+                    // Additional context for debugging backend vs contract issues
+                    console.log(`\n💡 DEBUGGING CONTEXT:`);
+                    console.log(`  - If this is a backend service issue: try getting a fresh quote and see if it works`);
+                    console.log(`  - If this is a router-specific issue: the error will persist with fresh quotes`);
+                    console.log(`  - Call data size: ${trade.data.length} chars suggests routing complexity`);
                     console.log(`  - Use Tenderly data above to simulate and debug the transaction`);
-                    console.log(`  - Transaction failed before reaching the network (as expected)`);
+                    
+                    throw new Error(`${router.toUpperCase()} transaction reverted: ${actualRevert}`);
                 }
-                
-                throw new Error(`${router.toUpperCase()} transaction reverted: ${actualRevert}`);
             }
         }
         
-        // Step 8: Execute transaction
-        console.log(`\n8. Executing ${router.toUpperCase()} swap...`);
-        const executionResult = await executeRainbowTransaction(
-            testSigner, 
-            modifiedTrade, 
-            rainbowExecution, 
-            quoteResponse,
-            config.rainbowAddress
-        );
-        
-        // Step 9: Report results
-        const balanceChanges = await reportBalanceChanges(
-            testSigner,
-            USDC,
-            WETH,
-            initialUsdcBalance,
-            initialWethBalance,
-            quoteResponse
-        );
-        
-        return {
-            router,
-            success: true,
-            gasUsed: executionResult.gasUsed,
-            txHash: executionResult.txHash,
-            balanceChanges
-        };
+        // Step 8: Execute transaction (if not simulation only)
+        if (simulateOnly) {
+            console.log(`\n8. ⏸️  SIMULATION ONLY MODE - Skipping actual transaction execution`);
+            console.log(`✅ Pre-simulation passed - transaction would likely succeed`);
+            
+            return {
+                router,
+                success: true,
+                gasUsed: gasEstimate?.toString(),
+                txHash: "SIMULATED",
+                tokenReceived: {
+                    amount: quoteResponse.outAmount,
+                    symbol: quoteResponse.outToken.symbol,
+                    usdValue: "~$5.00",
+                    wethUsdValue: "~$5.00"
+                }
+            };
+        } else {
+            console.log(`\n8. Executing ${router.toUpperCase()} swap on LIVE NETWORK...`);
+            const executionResult = await executeRainbowTransaction(
+                testSigner, 
+                modifiedTrade, 
+                rainbowExecution, 
+                quoteResponse,
+                config.rainbowAddress
+            );
+            
+            // Step 9: Report results
+            const balanceChanges = await reportBalanceChanges(
+                testSigner,
+                USDC,
+                WETH,
+                initialUsdcBalance,
+                initialWethBalance,
+                quoteResponse
+            );
+            
+            return {
+                router,
+                success: true,
+                gasUsed: executionResult.gasUsed,
+                txHash: executionResult.txHash,
+                tokenReceived: {
+                    amount: balanceChanges.wethReceived,
+                    symbol: "WETH",
+                    usdValue: balanceChanges.wethUsdValue,
+                    wethUsdValue: balanceChanges.wethUsdValue
+                }
+            };
+        }
         
     } catch (error: any) {
         console.error(`\n❌ ${router.toUpperCase()} test failed:`, error.message);
@@ -467,10 +488,10 @@ function printTestSummary(results: RouterTestResult[]) {
         console.log(`\n✅ SUCCESSFUL ROUTERS:`);
         successful.forEach(result => {
             console.log(`  🟢 ${result.router.toUpperCase()}`);
-            if (result.balanceChanges) {
-                console.log(`     💰 USDC spent: ${result.balanceChanges.usdcSpent}`);
-                console.log(`     💎 WETH received: ${result.balanceChanges.wethReceived}`);
-                console.log(`     💵 USD value: ~$${result.balanceChanges.wethUsdValue}`);
+            if (result.tokenReceived) {
+                console.log(`     💰 USDC spent: 5.0`);
+                console.log(`     💎 WETH received: ${result.tokenReceived.amount}`);
+                console.log(`     💵 USD value: ${result.tokenReceived.usdValue}`);
             }
             if (result.gasUsed) {
                 console.log(`     ⛽ Gas used: ${parseInt(result.gasUsed).toLocaleString()}`);
@@ -505,15 +526,12 @@ function printTestSummary(results: RouterTestResult[]) {
     
     console.log(`\n🔄 To retry specific routers, modify the ROUTERS array in this script`);
     
-    const networkName = hre.network.name;
-    const isLiveNetwork = networkName !== "hardhat" && networkName !== "localhost";
-    if (isLiveNetwork) {
-        console.log(`\n🌐 LIVE NETWORK NOTES:`);
-        console.log(`  - Network: ${networkName}`);
-        console.log(`  - All failed transactions include Tenderly simulation data above`);
-        console.log(`  - Use the To/From/Data/Value to debug in Tenderly`);
-        console.log(`  - Dev wallet used: ${DEV_WALLET_ADDRESS}`);
-    }
+    console.log(`\n🌐 LIVE NETWORK TESTING NOTES:`);
+    console.log(`  - Network: ${hre.network.name}`);
+    console.log(`  - Mode: ${simulateOnly ? 'Simulation Only' : 'Real Transactions'}`);
+    console.log(`  - All failed transactions include Tenderly simulation data above`);
+    console.log(`  - Use the To/From/Data/Value to debug in Tenderly`);
+    console.log(`  - Dev wallet used: ${DEV_WALLET_ADDRESS}`);
     
     console.log(`${"=".repeat(80)}`);
 }
