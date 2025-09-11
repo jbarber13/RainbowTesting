@@ -21,7 +21,7 @@ import { canoeParams } from "../util/canoeHelper";
 // Configuration
 const bypass = false; // Set to true to bypass warrant validation
 const usePermit = false; // Set to true to use ERC-2612 permits
-const testAmount = "1"; // 5 USDC for better test success rate
+const testAmount = "5"; // 5 USDC for better test success rate
 const simulateOnly = true; // Set to false to actually send transactions to live network
 
 // Network configuration (dev wallet is now both user and owner)
@@ -44,7 +44,7 @@ const ROUTERS = [
     //"airswap", //chain not supported
     //"cowswap", //incompatible
     //"enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
-    //"icecreamswap", //timed out
+    //"icecreamswap", //WORKING
     //"kyberswap", //WORKING live network only
     //"odos", //WORKING
     //"okx", //incompatible
