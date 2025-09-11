@@ -21,7 +21,7 @@ import { canoeParams } from "../util/canoeHelper";
 // Configuration
 const bypass = false; // Set to true to bypass warrant validation
 const usePermit = false; // Set to true to use ERC-2612 permits
-const testAmount = "5"; // 5 USDC for better test success rate
+const testAmount = "1"; // 1 USDC for better liquidity availability
 const simulateOnly = true; // Set to false to actually send transactions to live network
 
 // Network configuration (dev wallet is now both user and owner)
@@ -44,11 +44,11 @@ const ROUTERS = [
     //"airswap", //chain not supported
     //"cowswap", //incompatible
     //"enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
-    //"icecreamswap", //WORKING
-    //"kyberswap", //WORKING live network only
-    //"odos", //WORKING
+    "icecreamswap", //WORKING
+    "kyberswap", //WORKING live network only
+    "odos", //WORKING
     //"okx", //incompatible
-    //"oneinch", //WORKING
+    "oneinch", //WORKING
     //"openocean", //incompatible
     "paraswap", //WORKING
     //"unizen", //UnizenRouter: Invalid-user
@@ -112,7 +112,23 @@ async function main() {
             }
             console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
             
-            const result = await testRouter(router, setup);
+            let result = await testRouter(router, setup);
+            
+            // If first attempt fails with SWAAP#17, retry with fresh quote after brief delay
+            if (!result.success && result.error?.includes('SWAAP#17')) {
+                console.log(`🔄 SWAAP#17 detected - retrying ${router.toUpperCase()} with fresh quote after 3 second delay...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                const retrySetup = await setupTestEnvironment(usePermit, bypass);
+                result = await testRouter(router, retrySetup);
+                
+                if (result.success) {
+                    console.log(`✅ ${router.toUpperCase()} - SUCCESS on retry`);
+                } else {
+                    console.log(`❌ ${router.toUpperCase()} - Still failed after retry: ${result.error}`);
+                }
+            }
+            
             results.push(result);
             
             if (result.success) {
@@ -153,7 +169,7 @@ async function testRouter(router: string, setup: TestSetup): Promise<RouterTestR
         inTokenAddress: await USDC.getAddress(),
         outTokenAddress: await WETH.getAddress(),
         inTokenAmount: testAmount,
-        slippage: 5000, // 50% slippage tolerance for testing
+        slippage: 1000, // 10% slippage tolerance - better balance of success vs realistic testing
     };
 
     console.log(`💱 Testing ${testAmount} USDC → WETH via ${router.toUpperCase()}`);
@@ -176,8 +192,8 @@ async function testRouter(router: string, setup: TestSetup): Promise<RouterTestR
         console.log(`Quote: ${quoteResponse.inAmount} ${quoteResponse.inToken.symbol} -> ${quoteResponse.outAmount} ${quoteResponse.outToken.symbol}`);
         
         // Log quote timing to detect stale data
-        const quoteTime = new Date().toISOString();
-        console.log(`Quote received at: ${quoteTime}`);
+        const quoteTime = new Date();
+        console.log(`Quote received at: ${quoteTime.toISOString()}`);
         
         // Step 2: Get Rainbow execution
         console.log(`\n2. Getting Rainbow execution for ${router.toUpperCase()}...`);
@@ -208,8 +224,14 @@ async function testRouter(router: string, setup: TestSetup): Promise<RouterTestR
         console.log(`Rainbow target: ${trade.to}`);
         
         // Log execution timing to detect stale routing data
-        const executionTime = new Date().toISOString();
-        console.log(`Execution data received at: ${executionTime}`);
+        const executionTime = new Date();
+        console.log(`Execution data received at: ${executionTime.toISOString()}`);
+        
+        // Check if too much time has passed between quote and execution
+        const timeDiff = executionTime.getTime() - quoteTime.getTime();
+        if (timeDiff > 30000) { // 30 seconds
+            console.log(`⚠️  WARNING: ${timeDiff/1000}s elapsed between quote and execution - route may be stale`);
+        }
         
         // Extract target address first
         const targetAddress = extractTargetFromRainbowData(trade.data);
@@ -343,6 +365,23 @@ async function testRouter(router: string, setup: TestSetup): Promise<RouterTestR
             });
             console.log(`✅ Pre-simulation successful, gas: ${gasEstimate.toLocaleString()}`);
         } catch (simError: any) {
+            // Enhanced error handling for SWAAP#17
+            if (simError.message.includes('SWAAP#17')) {
+                console.log(`\n🔍 SWAAP#17 ANALYSIS:`);
+                console.log(`  - This indicates Paraswap route execution failed`);
+                console.log(`  - Common causes: route expired, insufficient liquidity, slippage exceeded`);
+                console.log(`  - Time between quote/execution: ${timeDiff/1000}s`);
+                console.log(`  - Call data size: ${trade.data.length} chars (larger = more complex routing)`);
+                
+                if (timeDiff > 10000) {
+                    console.log(`  - ⚠️  Route likely stale (${timeDiff/1000}s is too long)`);
+                }
+                
+                if (trade.data.length > 3000) {
+                    console.log(`  - ⚠️  Complex routing detected - may be less reliable`);
+                }
+            }
+            
             // Generate Tenderly simulation data for failed simulations
             console.log(`\n📊 TENDERLY SIMULATION DATA for ${router.toUpperCase()}:`);
             console.log(`${"=".repeat(50)}`);
