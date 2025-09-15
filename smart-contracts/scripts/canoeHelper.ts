@@ -127,6 +127,7 @@ export type canoeParams = {
     outTokenAddress: string,
     inTokenAmount: string, //human readable terms
     slippage: number,
+    useRainbow?: boolean, // Optional flag for Rainbow Router optimization
 }
 
 //depricated
