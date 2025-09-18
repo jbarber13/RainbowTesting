@@ -47,7 +47,7 @@ const ROUTERS = [
   "kyberswap", //WORKING live network only
   "odos", //WORKING
   //"okx", //incompatible
-  "oneinch", //WORKING
+  //"oneinch", //WORKING
   //"openocean", //incompatible
   "paraswap", //WORKING
   //"unizen", //UnizenRouter: Invalid-user
@@ -141,8 +141,8 @@ async function main() {
 
     // Add delay between tests to avoid rate limiting
     if (ROUTERS.indexOf(router) < ROUTERS.length - 1) {
-      console.log("⏱️  Waiting 2 seconds before next test...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("⏱️  Waiting 3 seconds before next test...");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 
@@ -170,6 +170,7 @@ async function testRouter(
     inTokenAmount: testAmount,
     slippage: 1000, // 10% slippage tolerance - better balance of success vs realistic testing
     useRainbow: true, // 🎯 NEW: Enables optimized Rainbow Router flow from start
+    getCalldata: true //needed for oneinch to get the actuall calldata for the swap - the oneinch service will refetch if this is lacking, but it may lead to rate limit issues
   };
 
   console.log(`🚀 Using optimized Rainbow Router flow with useRainbow flag`);
@@ -196,6 +197,11 @@ async function testRouter(
     console.log(
       `Quote: ${quoteResponse.inAmount} ${quoteResponse.inToken.symbol} -> ${quoteResponse.outAmount} ${quoteResponse.outToken.symbol}`,
     );
+
+    console.log("\n🔍 COUPON DEBUG:");
+    console.log("Coupon account:", quoteResponse.coupon.account);
+    console.log("Expected user address:", testAddress);
+    console.log("Expected rainbow address:", config.rainbowAddress);
 
     // Log quote timing to detect stale data
     const quoteTime = new Date();

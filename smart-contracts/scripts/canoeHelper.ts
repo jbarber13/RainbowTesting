@@ -128,6 +128,7 @@ export type canoeParams = {
     inTokenAmount: string, //human readable terms
     slippage: number,
     useRainbow?: boolean, // Optional flag for Rainbow Router optimization
+    getCalldata?: boolean // Optional flag to get calldata, needed for oneinch
 }
 
 //depricated
