@@ -2,6 +2,9 @@
 
 export interface ExecutionRequest {
   coupon: Coupon;
+  inToken: Token;
+  outToken: Token;
+  inputAmount: string;
   signingRequest?: SigningRequest;
   blockaidSim?: boolean;
   useRainbow?: boolean;
@@ -11,6 +14,13 @@ export interface Coupon {
   chainId: number;
   account: string; // 0x... address
   raw?: any;
+}
+
+export interface Token {
+  address: string;
+  decimals: number;
+  symbol: string;
+  chainId: number;
 }
 
 export interface SigningRequest {

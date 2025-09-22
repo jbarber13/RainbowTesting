@@ -17,6 +17,7 @@ import {
   getNetworkConfig,
 } from "../util/canoeHelper";
 import { canoeParams } from "../util/canoeHelper";
+import { Token } from "./canoeInterface";
 
 // Configuration
 const bypass = false; // Set to true to bypass warrant validation
@@ -42,14 +43,14 @@ const DEV_WALLET_ADDRESS = "0x3CB68a6762041aA05E762814A8791CA9d98E79A0";
 const ROUTERS = [
   //"airswap", //chain not supported
   //"cowswap", //incompatible
-  //"enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
-  "icecreamswap", //WORKING
-  "kyberswap", //WORKING live network only
-  "odos", //WORKING
+  "enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
+  //"icecreamswap", //WORKING
+  //"kyberswap", //WORKING live network only
+  //"odos", //WORKING - test this to confirm token preservation fix works
   //"okx", //incompatible
   //"oneinch", //WORKING
   //"openocean", //incompatible
-  "paraswap", //WORKING
+  //"paraswap", //WORKING
   //"unizen", //UnizenRouter: Invalid-user
   //"usor", //incompatible, no recipient param on api
   //"zeroex" //incompatible
@@ -158,6 +159,20 @@ async function testRouter(
     setup;
   const testAddress = await testSigner.getAddress();
 
+  // Create original token objects that must be preserved throughout the flow
+  const originalInToken: Token = {
+    address: await USDC.getAddress(),
+    decimals: 6,
+    symbol: "USDC",
+    chainId: 10
+  };
+
+  const originalOutToken: Token = {
+    address: await WETH.getAddress(),
+    decimals: 18,
+    symbol: "WETH",
+    chainId: 10
+  };
 
   // Set up test parameters - using new optimized Rainbow Router flow
   const inputAmount = parseUnits(testAmount, 6);
@@ -165,8 +180,8 @@ async function testRouter(
     chain: "optimism",
     account: config.rainbowAddress, //fetch quote as rainbow => dex => rainbow
     isExactIn: true,
-    inTokenAddress: await USDC.getAddress(),
-    outTokenAddress: await WETH.getAddress(),
+    inTokenAddress: originalInToken.address,
+    outTokenAddress: originalOutToken.address,
     inTokenAmount: testAmount,
     slippage: 1000, // 10% slippage tolerance - better balance of success vs realistic testing
     useRainbow: true, // 🎯 NEW: Enables optimized Rainbow Router flow from start
@@ -207,13 +222,16 @@ async function testRouter(
     const quoteTime = new Date();
     console.log(`Quote received at: ${quoteTime.toISOString()}`);
 
-    // Step 2: Get Rainbow execution
+    // Step 2: Get Rainbow execution - MUST use original token objects, not quote response tokens
     console.log(
       `\n2. Getting Rainbow execution for ${router.toUpperCase()}...`,
     );
     const rainbowExecution = await getRainbowExecution(
       quoteResponse.coupon,
       router,
+      originalInToken,
+      originalOutToken,
+      inputAmount.toString(),
       usePermit,
     );
 

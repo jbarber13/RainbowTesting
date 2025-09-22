@@ -79,10 +79,27 @@ const testRainbowCanoeFlow = async (setup: any) => {
             console.log("Coupon.raw keys:", Object.keys(quoteResponse.coupon.raw))
         }
         
+        // Create token objects for the new signature
+        const inToken = {
+            address: await USDC.getAddress(),
+            decimals: 6,
+            symbol: "USDC",
+            chainId: 10
+        };
+
+        const outToken = {
+            address: await WETH.getAddress(),
+            decimals: 18,
+            symbol: "WETH",
+            chainId: 10
+        };
+
+        const inputAmount = parseUnits(testAmount, 6);
+
         // Step 2: Transform quote to Rainbow Router execution
         console.log("\n2. Transforming to Rainbow Router execution...")
         console.log("⚠️  Watch server logs now for debug output!")
-        const rainbowExecution = await getRainbowExecution(quoteResponse.coupon, "odos", usePermit)
+        const rainbowExecution = await getRainbowExecution(quoteResponse.coupon, "odos", inToken, outToken, inputAmount, usePermit)
         
         console.log("✅ Rainbow execution prepared")
         

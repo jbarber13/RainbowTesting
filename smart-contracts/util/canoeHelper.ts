@@ -4,7 +4,7 @@ import { IERC20__factory, RainbowRouter, RainbowRouter__factory } from "../typec
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
 import axios from "axios";
-import { ExecutionRequest, Coupon, RainbowExecutionInfo } from "../scripts/canoeInterface";
+import { ExecutionRequest, Coupon, Token, RainbowExecutionInfo } from "../scripts/canoeInterface";
 import { generatePermitSignature } from "../scripts/msc";
 
 // Re-export all the types and interfaces from the original canoeHelper
@@ -186,19 +186,23 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
     }
 };
 
-export const getRainbowExecution = async (coupon: Coupon, market: string, usePermit: boolean = false, baseUrl?: string): Promise<RainbowExecutionInfo> => {
+export const getRainbowExecution = async (coupon: Coupon, market: string, inToken: Token, outToken: Token, inputAmount: string, usePermit: boolean = false, baseUrl?: string): Promise<RainbowExecutionInfo> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/execution_information`;
-    
+
     const requestBody: ExecutionRequest = {
         coupon: coupon,
+        inToken: inToken,
+        outToken: outToken,
+        inputAmount: inputAmount,
         useRainbow: true
     };
-    
+
     if (usePermit) {
         console.log("🔑 Including signingRequest for permit signatures");
         requestBody.signingRequest = {};
     }
-    
+
+
     try {
         console.log(`Fetching ${market.toUpperCase()} Rainbow execution info from:`, url);
         const response = await axios.post(url, requestBody);
