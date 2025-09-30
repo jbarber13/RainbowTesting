@@ -43,14 +43,14 @@ const DEV_WALLET_ADDRESS = "0x3CB68a6762041aA05E762814A8791CA9d98E79A0";
 const ROUTERS = [
   //"airswap", //chain not supported
   //"cowswap", //incompatible
-  "enso", //'400 response from enso: {"message":["each value in fee must be a string","fee is required when feeReceiver is provided."],"error":"Bad Request","statusCode":400}
-  //"icecreamswap", //WORKING
+  "enso", //WORKING
+  "icecreamswap", //WORKING
   //"kyberswap", //WORKING live network only
-  //"odos", //WORKING - test this to confirm token preservation fix works
+  "odos", //WORKING - test this to confirm token preservation fix works
   //"okx", //incompatible
-  //"oneinch", //WORKING
-  //"openocean", //incompatible
-  //"paraswap", //WORKING
+  "oneinch", //WORKING
+  "openocean", //incompatible
+  "paraswap", //WORKING
   //"unizen", //UnizenRouter: Invalid-user
   //"usor", //incompatible, no recipient param on api
   //"zeroex" //incompatible
@@ -226,12 +226,32 @@ async function testRouter(
     console.log(
       `\n2. Getting Rainbow execution for ${router.toUpperCase()}...`,
     );
+
+    // Create ExecutionRequest with required fields
+    const executionRequest = {
+      coupon: quoteResponse.coupon,
+      useRainbow: true,
+      inToken: {
+        address: originalInToken.address,
+        chainId: originalInToken.chainId,
+        decimals: originalInToken.decimals,
+        symbol: originalInToken.symbol
+      },
+      outToken: {
+        address: originalOutToken.address,
+        chainId: originalOutToken.chainId,
+        decimals: originalOutToken.decimals,
+        symbol: originalOutToken.symbol
+      },
+      inputAmount: inputAmount.toString()
+    };
+
     const rainbowExecution = await getRainbowExecution(
-      quoteResponse.coupon,
+      executionRequest.coupon,
       router,
-      originalInToken,
-      originalOutToken,
-      inputAmount.toString(),
+      executionRequest.inToken,
+      executionRequest.outToken,
+      executionRequest.inputAmount,
       usePermit,
     );
 
