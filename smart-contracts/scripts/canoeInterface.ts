@@ -12,8 +12,14 @@ export interface ExecutionRequest {
 
 export interface Coupon {
   chainId: number;
-  account: string; // 0x... address
+  account: string; // 0x... address (Rainbow Router for routing)
+  userAddress?: string; // 0x... address (User wallet for permit owner)
   raw?: any;
+  rainbowPermitParams?: {
+    value: string;
+    nonce: string;
+    deadline: string;
+  };
 }
 
 export interface Token {

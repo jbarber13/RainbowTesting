@@ -122,13 +122,15 @@ export enum RainbowTxType {
 export type canoeParams = {
     chain: string,
     account: string,
+    userAddress?: string, // Optional: User wallet address (for permit owner when using usePermit)
     isExactIn: boolean,
     inTokenAddress: string,
     outTokenAddress: string,
     inTokenAmount: string, //human readable terms
     slippage: number,
     useRainbow?: boolean, // Optional flag for Rainbow Router optimization
-    getCalldata?: boolean // Optional flag to get calldata, needed for oneinch
+    getCalldata?: boolean, // Optional flag to get calldata, needed for oneinch
+    usePermit?: boolean // Optional flag to enable EIP-2612 permit signatures
 }
 
 //depricated

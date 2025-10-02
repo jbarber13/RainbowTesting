@@ -83,48 +83,106 @@ interface TestConfig {
   delayBetweenTests: number; // Milliseconds between tests
 }
 
-// Default configuration for USDC → WETH on Optimism
-const CONFIG: TestConfig = {
-  // Execution settings
-  bypass: false,
-  usePermit: false,
-  simulateOnly: true,
+// Test configurations - add multiple test scenarios here
+const TEST_CONFIGS: TestConfig[] = [
+  // Test 1: USDC → WETH (ERC20 → ERC20 with permits)
+  {
+    // Execution settings
+    bypass: false,
+    usePermit: true,
+    simulateOnly: true,
 
-  // Network settings
-  chain: "optimism",
-  chainId: 10,
-  userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
+    // Network settings
+    chain: "optimism",
+    chainId: 10,
+    userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
 
-  // Trade settings
-  testAmount: "5",
-  slippage: 1000, // 10%
+    // Trade settings
+    testAmount: "5",
+    slippage: 1000, // 10%
 
-  // Token pair
-  inToken: {
-    symbol: "USDC",
-    decimals: 6,
-    isNative: false,
+    // Token pair
+    inToken: {
+      symbol: "USDC",
+      decimals: 6,
+      isNative: false,
+    },
+    outToken: {
+      symbol: "WETH",
+      decimals: 18,
+      isNative: false,
+    },
+
+    // Routers to test
+    routers: [
+      "enso",
+      "icecreamswap",
+      "odos",
+      "oneinch",
+      "paraswap",
+      "kyberswap",
+      "unizen"
+    ],
+
+    delayBetweenTests: 3000,
   },
-  outToken: {
-    symbol: "WETH",
-    decimals: 18,
-    isNative: false,
+
+  // Test 2: ETH → WETH (Native ETH as input)
+  {
+    bypass: false,
+    usePermit: false, // No permits needed for native ETH
+    simulateOnly: true,
+
+    chain: "optimism",
+    chainId: 10,
+    userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
+
+    testAmount: "0.001", // 0.001 ETH
+    slippage: 1000,
+
+    inToken: {
+      symbol: "ETH",
+      decimals: 18,
+      isNative: true,
+    },
+    outToken: {
+      symbol: "WETH",
+      decimals: 18,
+      isNative: false,
+    },
+
+    routers: ["enso"],
+    delayBetweenTests: 3000,
   },
 
-  // Routers to test
-  routers: [
-    //"enso",
-    //"icecreamswap",
-    //"odos",
-    //"oneinch",
-    //"paraswap",
-    "kyberswap",
-    "unizen"
-    
-  ],
+  // Test 3: USDC → ETH (Native ETH as output)
+  {
+    bypass: false,
+    usePermit: true, // Permits for USDC input
+    simulateOnly: true,
 
-  delayBetweenTests: 3000,
-};
+    chain: "optimism",
+    chainId: 10,
+    userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
+
+    testAmount: "5",
+    slippage: 1000,
+
+    inToken: {
+      symbol: "USDC",
+      decimals: 6,
+      isNative: false,
+    },
+    outToken: {
+      symbol: "ETH",
+      decimals: 18,
+      isNative: true,
+    },
+
+    routers: ["enso"],
+    delayBetweenTests: 3000,
+  },
+];
 
 // ============================================================================
 // EXAMPLE CONFIGURATIONS
@@ -192,108 +250,122 @@ interface RouterTestResult {
 
 async function main() {
   console.log("🚀 STARTING COMPREHENSIVE ROUTER TESTING");
-  console.log(`Testing ${CONFIG.routers.length} routers: ${CONFIG.routers.join(", ")}`);
+  console.log(`Testing ${TEST_CONFIGS.length} configuration(s)\n`);
 
-  const results: RouterTestResult[] = [];
+  const allResults: Map<string, RouterTestResult[]> = new Map();
   const networkName = hre.network.name;
 
-  console.log(`\n🌐 Network: ${networkName} (${CONFIG.chain})`);
-  console.log(`\n💱 Test Parameters:`);
-  console.log(`  Amount: ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`);
-  console.log(`  Slippage: ${CONFIG.slippage / 100}% (${CONFIG.slippage} basis points)`);
-  console.log(`  UsePermit: ${CONFIG.usePermit}`);
-  console.log(`  Bypass: ${CONFIG.bypass}`);
-  console.log(
-    `  Simulate Only: ${CONFIG.simulateOnly ? "✅ YES (no actual transactions)" : "❌ NO (will send real transactions)"}`,
-  );
+  // Run tests for each configuration
+  for (let configIndex = 0; configIndex < TEST_CONFIGS.length; configIndex++) {
+    const CONFIG = TEST_CONFIGS[configIndex];
+    const configName = `${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`;
 
-  console.log(`\n🔴 LIVE NETWORK MODE:`);
-  console.log(`  - Dev Wallet (User & Owner): ${CONFIG.userWalletAddress}`);
-  console.log(
-    `  - Quote Strategy: Optimized Rainbow Router (useRainbow: true)`,
-  );
-  console.log(`  - Backend: No rebuild needed - 50% faster performance`);
-  console.log(`  - Will generate Tenderly simulation data for failures`);
-  if (CONFIG.simulateOnly) {
-    console.log(`  - Will NOT send actual transactions (simulation only)`);
-  } else {
-    console.log(`  - Will send REAL transactions to live network`);
-  }
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`📋 TEST CONFIGURATION ${configIndex + 1}/${TEST_CONFIGS.length}: ${configName}`);
+    console.log(`${"=".repeat(80)}`);
+    console.log(`\n🌐 Network: ${networkName} (${CONFIG.chain})`);
+    console.log(`\n💱 Test Parameters:`);
+    console.log(`  Amount: ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`);
+    console.log(`  Slippage: ${CONFIG.slippage / 100}% (${CONFIG.slippage} basis points)`);
+    console.log(`  UsePermit: ${CONFIG.usePermit}`);
+    console.log(`  Bypass: ${CONFIG.bypass}`);
+    console.log(
+      `  Simulate Only: ${CONFIG.simulateOnly ? "✅ YES (no actual transactions)" : "❌ NO (will send real transactions)"}`,
+    );
+    console.log(`  Routers: ${CONFIG.routers.join(", ")}`);
 
-  // Test each router with fresh setup
-  for (const router of CONFIG.routers) {
-    console.log(`\n${"=".repeat(60)}`);
-    console.log(`🧪 TESTING ROUTER: ${router.toUpperCase()}`);
-    console.log(`${"=".repeat(60)}`);
+    const results: RouterTestResult[] = [];
 
-    try {
-      // Fresh setup for each router to ensure clean state
-      console.log(
-        "🔄 Setting up fresh test environment for",
-        router.toUpperCase(),
-      );
-      const setup = await setupTestEnvironment(CONFIG.usePermit, CONFIG.bypass);
+    // Test each router with fresh setup
+    for (const router of CONFIG.routers) {
+      console.log(`\n${"=".repeat(60)}`);
+      console.log(`🧪 TESTING ROUTER: ${router.toUpperCase()}`);
+      console.log(`${"=".repeat(60)}`);
 
-      // Verify the signer matches our dev wallet
-      const testAddress = await setup.testSigner.getAddress();
-      if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
-        throw new Error(
-          `Expected dev wallet ${CONFIG.userWalletAddress}, but got ${testAddress}. Make sure your wallet is configured correctly.`,
+      try {
+        // Fresh setup for each router to ensure clean state
+        console.log(
+          "🔄 Setting up fresh test environment for",
+          router.toUpperCase(),
         );
-      }
-      console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
+        const setup = await setupTestEnvironment(CONFIG.usePermit, CONFIG.bypass);
 
-      const result = await testRouter(router, setup);
-      results.push(result);
+        // Verify the signer matches our dev wallet
+        const testAddress = await setup.testSigner.getAddress();
+        if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
+          throw new Error(
+            `Expected dev wallet ${CONFIG.userWalletAddress}, but got ${testAddress}. Make sure your wallet is configured correctly.`,
+          );
+        }
+        console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
 
-      if (result.success) {
-        console.log(`✅ ${router.toUpperCase()} - SUCCESS`);
-      } else {
-        console.log(`❌ ${router.toUpperCase()} - FAILED: ${result.error}`);
+        const result = await testRouter(router, setup, CONFIG);
+        results.push(result);
+
+        if (result.success) {
+          console.log(`✅ ${router.toUpperCase()} - SUCCESS`);
+        } else {
+          console.log(`❌ ${router.toUpperCase()} - FAILED: ${result.error}`);
+        }
+      } catch (error: any) {
+        console.log(`❌ ${router.toUpperCase()} - FAILED: ${error.message}`);
+        results.push({
+          router,
+          success: false,
+          error: error.message,
+        });
       }
-    } catch (error: any) {
-      console.log(`❌ ${router.toUpperCase()} - FAILED: ${error.message}`);
-      results.push({
-        router,
-        success: false,
-        error: error.message,
-      });
+
+      // Add delay between tests to avoid rate limiting
+      if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
+        console.log(`⏱️  Waiting ${CONFIG.delayBetweenTests / 1000} seconds before next test...`);
+        await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
+      }
     }
 
-    // Add delay between tests to avoid rate limiting
-    if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
-      console.log(`⏱️  Waiting ${CONFIG.delayBetweenTests / 1000} seconds before next test...`);
-      await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
+    allResults.set(configName, results);
+
+    // Add delay between configurations
+    if (configIndex < TEST_CONFIGS.length - 1) {
+      console.log(`\n⏱️  Waiting 5 seconds before next configuration...`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 
-  // Print comprehensive results
-  printTestSummary(results);
+  // Print comprehensive results for all configurations
+  printTestSummaryAllConfigs(allResults);
 }
 
 async function testRouter(
   router: string,
   setup: TestSetup,
+  CONFIG: TestConfig,
 ): Promise<RouterTestResult> {
   const { testSigner, contractOwner, mainnet, Rainbow, USDC, WETH, config } =
     setup;
   const testAddress = await testSigner.getAddress();
 
-  // Get token addresses from setup (USDC and WETH are still available from setup)
-  // In the future, this could be extended to support arbitrary tokens
-  const inTokenContract = CONFIG.inToken.symbol === "USDC" ? USDC : WETH;
-  const outTokenContract = CONFIG.outToken.symbol === "WETH" ? WETH : USDC;
+  // Native ETH address used by aggregators
+  const NATIVE_ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+  // Get token contracts and addresses (handle native ETH)
+  let inTokenContract = CONFIG.inToken.symbol === "USDC" ? USDC : WETH;
+  let outTokenContract = CONFIG.outToken.symbol === "WETH" ? WETH : USDC;
 
   // Create original token objects that must be preserved throughout the flow
   const originalInToken: Token = {
-    address: CONFIG.inToken.address || await inTokenContract.getAddress(),
+    address: CONFIG.inToken.isNative
+      ? NATIVE_ETH_ADDRESS
+      : (CONFIG.inToken.address || await inTokenContract.getAddress()),
     decimals: CONFIG.inToken.decimals,
     symbol: CONFIG.inToken.symbol,
     chainId: CONFIG.chainId
   };
 
   const originalOutToken: Token = {
-    address: CONFIG.outToken.address || await outTokenContract.getAddress(),
+    address: CONFIG.outToken.isNative
+      ? NATIVE_ETH_ADDRESS
+      : (CONFIG.outToken.address || await outTokenContract.getAddress()),
     decimals: CONFIG.outToken.decimals,
     symbol: CONFIG.outToken.symbol,
     chainId: CONFIG.chainId
@@ -303,25 +375,31 @@ async function testRouter(
   const inputAmount = parseUnits(CONFIG.testAmount, CONFIG.inToken.decimals);
   const params: canoeParams = {
     chain: CONFIG.chain,
-    account: config.rainbowAddress, //fetch quote as rainbow => dex => rainbow
+    account: config.rainbowAddress, // Rainbow Router address (for DEX routing)
+    userAddress: testAddress, // User wallet address (for permit owner/signer)
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
     inTokenAmount: CONFIG.testAmount,
     slippage: CONFIG.slippage,
     useRainbow: true, // 🎯 Enables optimized Rainbow Router flow from start
-    getCalldata: true //needed for oneinch to get the actual calldata for the swap
+    getCalldata: true, //needed for oneinch to get the actual calldata for the swap
+    usePermit: CONFIG.usePermit // 🔑 Request permit signature flow
   };
 
   console.log(`🚀 Using optimized Rainbow Router flow with useRainbow flag`);
 
   console.log(
-    `💱 Testing ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol} via ${router.toUpperCase()}`,
+    `\n💱 Testing ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol} via ${router.toUpperCase()}`,
   );
 
-  // Get initial balances
-  const initialInTokenBalance = await inTokenContract.balanceOf(testAddress);
-  const initialOutTokenBalance = await outTokenContract.balanceOf(testAddress);
+  // Get initial balances (handle native ETH)
+  const initialInTokenBalance = CONFIG.inToken.isNative
+    ? await hre.ethers.provider.getBalance(testAddress)
+    : await inTokenContract.balanceOf(testAddress);
+  const initialOutTokenBalance = CONFIG.outToken.isNative
+    ? await hre.ethers.provider.getBalance(testAddress)
+    : await outTokenContract.balanceOf(testAddress);
   console.log(`📊 Initial ${CONFIG.inToken.symbol}: ${formatUnits(initialInTokenBalance, CONFIG.inToken.decimals)}`);
   console.log(`📊 Initial ${CONFIG.outToken.symbol}: ${formatUnits(initialOutTokenBalance, CONFIG.outToken.decimals)}`);
 
@@ -338,14 +416,30 @@ async function testRouter(
       `Quote: ${quoteResponse.inAmount} ${quoteResponse.inToken.symbol} -> ${quoteResponse.outAmount} ${quoteResponse.outToken.symbol}`,
     );
 
-    console.log("\n🔍 COUPON DEBUG:");
-    console.log("Coupon account:", quoteResponse.coupon.account);
-    console.log("Expected user address:", testAddress);
-    console.log("Expected rainbow address:", config.rainbowAddress);
-
     // Log quote timing to detect stale data
     const quoteTime = new Date();
-    console.log(`Quote received at: ${quoteTime.toISOString()}`);
+
+    // Step 1.5: Sign permit if rainbowPermitRequest exists
+    let permitSignature: string | undefined;
+    if (CONFIG.usePermit && quoteResponse.rainbowPermitRequest) {
+      console.log(`\n1.5. Signing EIP-2612 permit...`);
+
+      const permitRequest = quoteResponse.rainbowPermitRequest;
+      try {
+        permitSignature = await testSigner.signTypedData(
+          permitRequest.domain,
+          permitRequest.types,
+          permitRequest.message
+        );
+        console.log(`✅ Permit signed successfully`);
+      } catch (error: any) {
+        console.error(`❌ Failed to sign permit: ${error.message}`);
+        throw new Error(`Permit signing failed: ${error.message}`);
+      }
+    } else if (CONFIG.usePermit && !quoteResponse.rainbowPermitRequest) {
+      console.log(`\n⚠️  usePermit is enabled but quote response doesn't contain rainbowPermitRequest`);
+      console.log(`  - This may indicate the backend doesn't support permits for this router/token`);
+    }
 
     // Step 2: Get Rainbow execution - MUST use original token objects, not quote response tokens
     console.log(
@@ -378,6 +472,7 @@ async function testRouter(
       executionRequest.outToken,
       executionRequest.inputAmount,
       CONFIG.usePermit,
+      permitSignature,
     );
 
     console.log("✅ Rainbow execution prepared");
@@ -413,7 +508,6 @@ async function testRouter(
 
     // Log execution timing to detect stale routing data
     const executionTime = new Date();
-    console.log(`Execution data received at: ${executionTime.toISOString()}`);
 
     // Check if too much time has passed between quote and execution
     const timeDiff = executionTime.getTime() - quoteTime.getTime();
@@ -463,22 +557,12 @@ async function testRouter(
     }
 
     // Validate Rainbow Router configuration
-    console.log(`\n🔍 RAINBOW ROUTER VALIDATION:`);
-    console.log(`  - Rainbow Router: ${config.rainbowAddress}`);
-    console.log(`  - Expected Owner: ${CONFIG.userWalletAddress}`);
-
-    // Check actual owner
     try {
       const actualOwner = await Rainbow.owner();
-      console.log(`  - Actual Owner: ${actualOwner}`);
-      console.log(
-        `  - Owner Match: ${actualOwner.toLowerCase() === CONFIG.userWalletAddress.toLowerCase() ? "✅ YES" : "❌ NO"}`,
-      );
-
       if (actualOwner.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
-        console.log(
-          `  ⚠️  WARNING: Owner mismatch may cause authorization issues`,
-        );
+        console.log(`⚠️  WARNING: Rainbow Router owner mismatch`);
+        console.log(`  - Expected: ${CONFIG.userWalletAddress}`);
+        console.log(`  - Actual: ${actualOwner}`);
       }
     } catch (ownerError: any) {
       console.log(`  ❌ Could not check owner: ${ownerError.message}`);
@@ -489,10 +573,6 @@ async function testRouter(
     const targetOutTokenBalance = await outTokenContract.balanceOf(targetAddress);
     const targetEthBalance =
       await hre.ethers.provider.getBalance(targetAddress);
-
-    console.log(
-      `Target balances: ${CONFIG.inToken.symbol}=${formatUnits(targetInTokenBalance, CONFIG.inToken.decimals)}, ${CONFIG.outToken.symbol}=${formatUnits(targetOutTokenBalance, CONFIG.outToken.decimals)}, ETH=${formatUnits(targetEthBalance, 18)}`,
-    );
 
     if (
       targetInTokenBalance === 0n &&
@@ -527,8 +607,10 @@ async function testRouter(
       BACKEND_WARRANT_SIGNER,
     );
 
-    // Step 6: Handle approvals if not using permits
-    if (!CONFIG.usePermit) {
+    // Step 6: Handle approvals if not using permits (skip for native ETH)
+    if (CONFIG.inToken.isNative) {
+      console.log(`\n6. Skipping approval (native ETH input)`);
+    } else if (!CONFIG.usePermit) {
       console.log(`\n6. Handling ERC20 approval...`);
       await handleERC20Approval(
         testSigner,
@@ -541,13 +623,16 @@ async function testRouter(
     }
 
     // Step 6.5: PRE-EXECUTION STATE CHECK (only show issues)
-    const preInTokenBalance = await inTokenContract.balanceOf(testAddress);
-    const preOutTokenBalance = await outTokenContract.balanceOf(testAddress);
+    const preInTokenBalance = CONFIG.inToken.isNative
+      ? await hre.ethers.provider.getBalance(testAddress)
+      : await inTokenContract.balanceOf(testAddress);
+    const preOutTokenBalance = CONFIG.outToken.isNative
+      ? await hre.ethers.provider.getBalance(testAddress)
+      : await outTokenContract.balanceOf(testAddress);
     const ethBalance = await hre.ethers.provider.getBalance(testAddress);
-    const rainbowAllowance = await inTokenContract.allowance(
-      testAddress,
-      config.rainbowAddress,
-    );
+    const rainbowAllowance = CONFIG.inToken.isNative
+      ? inputAmount // Native ETH doesn't need allowance
+      : await inTokenContract.allowance(testAddress, config.rainbowAddress);
 
     // Check for issues
     const issues = [];
@@ -560,26 +645,11 @@ async function testRouter(
     if (ethBalance < parseUnits("0.001", 18))
       issues.push("Very low ETH balance for gas");
 
-    // Only show diagnostics if there are issues or target mismatch
-    const backendTarget = quoteResponse.candidateTrade?.to || "N/A";
-    const targetMatch = backendTarget === targetAddress;
-
-    if (issues.length > 0 || !targetMatch || CONFIG.usePermit) {
+    // Only show diagnostics if there are issues
+    if (issues.length > 0) {
       console.log(`\n🔍 PRE-EXECUTION DIAGNOSTICS:`);
-      if (issues.length > 0) {
-        console.log(`❌ Issues found:`);
-        issues.forEach((issue) => console.log(`  - ${issue}`));
-      }
-      if (!targetMatch) {
-        console.log(
-          `❌ Target mismatch: Backend(${backendTarget}) != Extracted(${targetAddress})`,
-        );
-      }
-      if (CONFIG.usePermit && rainbowExecution.signingRequest?.permit2Address) {
-        console.log(
-          `🔏 Using Permit2: ${rainbowExecution.signingRequest.permit2Address}`,
-        );
-      }
+      console.log(`❌ Issues found:`);
+      issues.forEach((issue) => console.log(`  - ${issue}`));
     }
 
     // Step 7: Pre-simulate transaction to catch errors early
@@ -766,83 +836,40 @@ async function testRouter(
   }
 }
 
-function printTestSummary(results: RouterTestResult[]) {
-  console.log(`\n${"=".repeat(80)}`);
-  console.log(`📊 COMPREHENSIVE ROUTER TEST RESULTS`);
+function printTestSummaryAllConfigs(allResults: Map<string, RouterTestResult[]>) {
+  console.log(`\n\n${"=".repeat(80)}`);
+  console.log(`📊 COMPREHENSIVE TEST RESULTS - ALL CONFIGURATIONS`);
   console.log(`${"=".repeat(80)}`);
 
-  const successful = results.filter((r) => r.success);
-  const failed = results.filter((r) => !r.success);
+  let totalTests = 0;
+  let totalSuccess = 0;
+  let totalFailed = 0;
 
-  console.log(`\n📈 SUMMARY:`);
-  console.log(
-    `  ✅ Successful: ${successful.length}/${results.length} routers`,
-  );
-  console.log(`  ❌ Failed: ${failed.length}/${results.length} routers`);
-  console.log(
-    `  📊 Success Rate: ${((successful.length / results.length) * 100).toFixed(1)}%`,
-  );
+  allResults.forEach((results, configName) => {
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
 
-  if (successful.length > 0) {
-    console.log(`\n✅ SUCCESSFUL ROUTERS:`);
-    successful.forEach((result) => {
-      console.log(`  🟢 ${result.router.toUpperCase()}`);
-      if (result.tokenReceived) {
-        console.log(`     💰 ${CONFIG.inToken.symbol} spent: ${CONFIG.testAmount}`);
-        console.log(`     💎 ${result.tokenReceived.symbol} received: ${result.tokenReceived.amount}`);
-        console.log(`     💵 USD value: ${result.tokenReceived.usdValue}`);
-      }
-      if (result.gasUsed) {
-        console.log(
-          `     ⛽ Gas used: ${parseInt(result.gasUsed).toLocaleString()}`,
-        );
-      }
-      if (result.txHash) {
-        console.log(`     🔗 TX: ${result.txHash}`);
-      }
-      console.log();
-    });
-  }
+    totalTests += results.length;
+    totalSuccess += successful.length;
+    totalFailed += failed.length;
 
-  if (failed.length > 0) {
-    console.log(`\n❌ FAILED ROUTERS:`);
-    failed.forEach((result) => {
-      console.log(`  🔴 ${result.router.toUpperCase()}: ${result.error}`);
-    });
-  }
+    console.log(`\n📋 ${configName}:`);
+    console.log(`  ✅ Success: ${successful.length}/${results.length}`);
+    console.log(`  ❌ Failed: ${failed.length}/${results.length}`);
 
-  console.log(`\n🎯 RECOMMENDATIONS:`);
-  if (successful.length > 0) {
-    const bestRouter = successful[0]; // First successful router
-    console.log(
-      `  - ${bestRouter.router.toUpperCase()} is confirmed working and can be used as a reference`,
-    );
-  }
+    if (successful.length > 0) {
+      console.log(`  ✓ Working: ${successful.map(r => r.router).join(", ")}`);
+    }
+    if (failed.length > 0) {
+      console.log(`  ✗ Failed: ${failed.map(r => r.router).join(", ")}`);
+    }
+  });
 
-  if (failed.length > 0) {
-    console.log(`  - Failed routers may need:`);
-    console.log(`    * Different slippage tolerance`);
-    console.log(`    * Route availability at test time`);
-    console.log(`    * Different permit/warrant settings`);
-    console.log(`    * Specific token pair support`);
-  }
-
-  console.log(
-    `\n🔄 To retry specific routers, modify the CONFIG.routers array in this script`,
-  );
-
-  console.log(`\n🌐 LIVE NETWORK TESTING NOTES:`);
-  console.log(`  - Network: ${hre.network.name} (${CONFIG.chain})`);
-  console.log(
-    `  - Mode: ${CONFIG.simulateOnly ? "Simulation Only" : "Real Transactions"}`,
-  );
-  console.log(
-    `  - All failed transactions include Tenderly simulation data above`,
-  );
-  console.log(`  - Use the To/From/Data/Value to debug in Tenderly`);
-  console.log(`  - Dev wallet used: ${CONFIG.userWalletAddress}`);
-  console.log(`  - Token pair: ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`);
-
+  console.log(`\n${"=".repeat(80)}`);
+  console.log(`📈 OVERALL SUMMARY:`);
+  console.log(`  Total Tests: ${totalTests}`);
+  console.log(`  ✅ Successful: ${totalSuccess} (${((totalSuccess / totalTests) * 100).toFixed(1)}%)`);
+  console.log(`  ❌ Failed: ${totalFailed} (${((totalFailed / totalTests) * 100).toFixed(1)}%)`);
   console.log(`${"=".repeat(80)}`);
 }
 

@@ -1,4 +1,3 @@
-/* eslint-disable import/no-extraneous-dependencies */
 /**
  * This file tests all the "admin" features:
  * - fee withdrawals

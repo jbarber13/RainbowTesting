@@ -1,4 +1,3 @@
-/* eslint-disable import/no-extraneous-dependencies */
 import { promises as fs } from "fs";
 import {
   ethers,
@@ -72,11 +71,9 @@ function bigIntReplacer(key: string, value: any): any {
 // --- Logger remains the same ---
 const Logger = {
   info(...args: any[]) {
-    // eslint-disable-next-line no-console
     console.info(...args);
   },
   log(...args: any[]) {
-    // eslint-disable-next-line no-console
     debug && console.log(...args);
   },
 };

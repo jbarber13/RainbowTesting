@@ -13,7 +13,6 @@
  */
 
 import path from "path";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { expect } from "chai";
 import { network, ethers } from "hardhat"; // Use ethers
 import { Sources } from "../types"; // Assuming Sources type is still valid

@@ -1,4 +1,3 @@
-/* eslint-disable import/no-extraneous-dependencies */
 /**
  * This file tests all the possible combinations of:
  * TOKEN => ETH

@@ -169,7 +169,7 @@ const checkLiveAccountBalances = async (testSigner: Signer, USDC: IERC20, WETH: 
 // Generic quote fetching
 export const getRouterQuote = async (market: string, params: any, baseUrl?: string): Promise<any> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/swap_quote`;
-    
+
     try {
         console.log(`Fetching ${market.toUpperCase()} quote from:`, url);
         const response = await axios.post(url, params);
@@ -186,7 +186,16 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
     }
 };
 
-export const getRainbowExecution = async (coupon: Coupon, market: string, inToken: Token, outToken: Token, inputAmount: string, usePermit: boolean = false, baseUrl?: string): Promise<RainbowExecutionInfo> => {
+export const getRainbowExecution = async (
+    coupon: Coupon,
+    market: string,
+    inToken: Token,
+    outToken: Token,
+    inputAmount: string,
+    usePermit: boolean = false,
+    permitSignature?: string,
+    baseUrl?: string
+): Promise<RainbowExecutionInfo> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/execution_information`;
 
     const requestBody: ExecutionRequest = {
@@ -198,8 +207,12 @@ export const getRainbowExecution = async (coupon: Coupon, market: string, inToke
     };
 
     if (usePermit) {
-        console.log("🔑 Including signingRequest for permit signatures");
-        requestBody.signingRequest = {};
+        if (permitSignature) {
+            // @ts-ignore - permitSignature is not yet in ExecutionRequest interface
+            requestBody.permitSignature = permitSignature;
+        } else {
+            requestBody.signingRequest = {};
+        }
     }
 
 
