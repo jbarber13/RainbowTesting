@@ -151,7 +151,15 @@ const TEST_CONFIGS: TestConfig[] = [
       isNative: false,
     },
 
-    routers: ["enso"],
+    routers: [
+      "enso",
+      "icecreamswap",
+      "odos",
+      "oneinch",
+      "paraswap",
+      "kyberswap",
+      "unizen"
+    ],
     delayBetweenTests: 3000,
   },
 
@@ -179,7 +187,15 @@ const TEST_CONFIGS: TestConfig[] = [
       isNative: true,
     },
 
-    routers: ["enso"],
+    routers: [
+      "enso",
+      "icecreamswap",
+      "odos",
+      "oneinch",
+      "paraswap",
+      "kyberswap",
+      "unizen"
+    ],
     delayBetweenTests: 3000,
   },
 ];
@@ -249,66 +265,42 @@ interface RouterTestResult {
 }
 
 async function main() {
-  console.log("🚀 STARTING COMPREHENSIVE ROUTER TESTING");
-  console.log(`Testing ${TEST_CONFIGS.length} configuration(s)\n`);
+  console.log("🚀 Testing routers across multiple configurations...\n");
 
   const allResults: Map<string, RouterTestResult[]> = new Map();
-  const networkName = hre.network.name;
 
   // Run tests for each configuration
   for (let configIndex = 0; configIndex < TEST_CONFIGS.length; configIndex++) {
     const CONFIG = TEST_CONFIGS[configIndex];
     const configName = `${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`;
 
-    console.log(`\n${"=".repeat(80)}`);
-    console.log(`📋 TEST CONFIGURATION ${configIndex + 1}/${TEST_CONFIGS.length}: ${configName}`);
-    console.log(`${"=".repeat(80)}`);
-    console.log(`\n🌐 Network: ${networkName} (${CONFIG.chain})`);
-    console.log(`\n💱 Test Parameters:`);
-    console.log(`  Amount: ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol}`);
-    console.log(`  Slippage: ${CONFIG.slippage / 100}% (${CONFIG.slippage} basis points)`);
-    console.log(`  UsePermit: ${CONFIG.usePermit}`);
-    console.log(`  Bypass: ${CONFIG.bypass}`);
-    console.log(
-      `  Simulate Only: ${CONFIG.simulateOnly ? "✅ YES (no actual transactions)" : "❌ NO (will send real transactions)"}`,
-    );
-    console.log(`  Routers: ${CONFIG.routers.join(", ")}`);
+    console.log(`\n📋 ${configName} (${CONFIG.routers.length} routers)`);
 
     const results: RouterTestResult[] = [];
 
     // Test each router with fresh setup
     for (const router of CONFIG.routers) {
-      console.log(`\n${"=".repeat(60)}`);
-      console.log(`🧪 TESTING ROUTER: ${router.toUpperCase()}`);
-      console.log(`${"=".repeat(60)}`);
-
       try {
-        // Fresh setup for each router to ensure clean state
-        console.log(
-          "🔄 Setting up fresh test environment for",
-          router.toUpperCase(),
-        );
         const setup = await setupTestEnvironment(CONFIG.usePermit, CONFIG.bypass);
 
         // Verify the signer matches our dev wallet
         const testAddress = await setup.testSigner.getAddress();
         if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
           throw new Error(
-            `Expected dev wallet ${CONFIG.userWalletAddress}, but got ${testAddress}. Make sure your wallet is configured correctly.`,
+            `Expected dev wallet ${CONFIG.userWalletAddress}, but got ${testAddress}`,
           );
         }
-        console.log(`✅ Using dev wallet for all operations: ${testAddress}`);
 
         const result = await testRouter(router, setup, CONFIG);
         results.push(result);
 
         if (result.success) {
-          console.log(`✅ ${router.toUpperCase()} - SUCCESS`);
+          console.log(`  ✅ ${router}`);
         } else {
-          console.log(`❌ ${router.toUpperCase()} - FAILED: ${result.error}`);
+          console.log(`  ❌ ${router}: ${result.error}`);
         }
       } catch (error: any) {
-        console.log(`❌ ${router.toUpperCase()} - FAILED: ${error.message}`);
+        console.log(`  ❌ ${router}: ${error.message}`);
         results.push({
           router,
           success: false,
@@ -318,7 +310,6 @@ async function main() {
 
       // Add delay between tests to avoid rate limiting
       if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
-        console.log(`⏱️  Waiting ${CONFIG.delayBetweenTests / 1000} seconds before next test...`);
         await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
       }
     }
@@ -327,7 +318,6 @@ async function main() {
 
     // Add delay between configurations
     if (configIndex < TEST_CONFIGS.length - 1) {
-      console.log(`\n⏱️  Waiting 5 seconds before next configuration...`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
@@ -387,12 +377,6 @@ async function testRouter(
     usePermit: CONFIG.usePermit // 🔑 Request permit signature flow
   };
 
-  console.log(`🚀 Using optimized Rainbow Router flow with useRainbow flag`);
-
-  console.log(
-    `\n💱 Testing ${CONFIG.testAmount} ${CONFIG.inToken.symbol} → ${CONFIG.outToken.symbol} via ${router.toUpperCase()}`,
-  );
-
   // Get initial balances (handle native ETH)
   const initialInTokenBalance = CONFIG.inToken.isNative
     ? await hre.ethers.provider.getBalance(testAddress)
@@ -400,21 +384,14 @@ async function testRouter(
   const initialOutTokenBalance = CONFIG.outToken.isNative
     ? await hre.ethers.provider.getBalance(testAddress)
     : await outTokenContract.balanceOf(testAddress);
-  console.log(`📊 Initial ${CONFIG.inToken.symbol}: ${formatUnits(initialInTokenBalance, CONFIG.inToken.decimals)}`);
-  console.log(`📊 Initial ${CONFIG.outToken.symbol}: ${formatUnits(initialOutTokenBalance, CONFIG.outToken.decimals)}`);
 
   try {
     // Step 1: Get quote
-    console.log(`\n1. Getting ${router.toUpperCase()} quote...`);
     const quoteResponse = await getRouterQuote(router, params);
 
     if (!quoteResponse || !quoteResponse.coupon) {
       throw new Error("Failed to get valid quote response");
     }
-
-    console.log(
-      `Quote: ${quoteResponse.inAmount} ${quoteResponse.inToken.symbol} -> ${quoteResponse.outAmount} ${quoteResponse.outToken.symbol}`,
-    );
 
     // Log quote timing to detect stale data
     const quoteTime = new Date();
@@ -422,8 +399,6 @@ async function testRouter(
     // Step 1.5: Sign permit if rainbowPermitRequest exists
     let permitSignature: string | undefined;
     if (CONFIG.usePermit && quoteResponse.rainbowPermitRequest) {
-      console.log(`\n1.5. Signing EIP-2612 permit...`);
-
       const permitRequest = quoteResponse.rainbowPermitRequest;
       try {
         permitSignature = await testSigner.signTypedData(
@@ -431,21 +406,14 @@ async function testRouter(
           permitRequest.types,
           permitRequest.message
         );
-        console.log(`✅ Permit signed successfully`);
       } catch (error: any) {
-        console.error(`❌ Failed to sign permit: ${error.message}`);
         throw new Error(`Permit signing failed: ${error.message}`);
       }
     } else if (CONFIG.usePermit && !quoteResponse.rainbowPermitRequest) {
-      console.log(`\n⚠️  usePermit is enabled but quote response doesn't contain rainbowPermitRequest`);
-      console.log(`  - This may indicate the backend doesn't support permits for this router/token`);
+      console.log(`      ⚠️  Permit requested but not provided by backend`);
     }
 
     // Step 2: Get Rainbow execution - MUST use original token objects, not quote response tokens
-    console.log(
-      `\n2. Getting Rainbow execution for ${router.toUpperCase()}...`,
-    );
-
     // Create ExecutionRequest with required fields
     const executionRequest = {
       coupon: quoteResponse.coupon,
@@ -475,23 +443,9 @@ async function testRouter(
       permitSignature,
     );
 
-    console.log("✅ Rainbow execution prepared");
-
-    // Debug warrant info
-    if (rainbowExecution.warrant) {
-      console.log(
-        `  - Warrant signer: ${rainbowExecution.warrant.verifyingSigner}`,
-      );
-      console.log(
-        `  - Backend signer match: ${rainbowExecution.warrant.verifyingSigner.toLowerCase() === BACKEND_WARRANT_SIGNER.toLowerCase()}`,
-      );
-    } else {
-      console.log(`  - No warrant (${router} doesn't use warrant system)`);
-    }
-
     // Apply bypass if enabled
     if (CONFIG.bypass && rainbowExecution.warrant) {
-      console.log("🔧 Applying warrant bypass (zero address signer)");
+      console.log(`      🔧 Bypass mode: using zero address signer`);
       rainbowExecution.warrant.verifyingSigner = ZERO_ADDRESS;
     }
 
@@ -504,8 +458,6 @@ async function testRouter(
       );
     }
 
-    console.log(`Rainbow target: ${trade.to}`);
-
     // Log execution timing to detect stale routing data
     const executionTime = new Date();
 
@@ -514,39 +466,12 @@ async function testRouter(
     if (timeDiff > 30000) {
       // 30 seconds
       console.log(
-        `⚠️  WARNING: ${timeDiff / 1000}s elapsed between quote and execution - route may be stale`,
+        `      ⚠️  ${timeDiff / 1000}s elapsed - route may be stale`,
       );
     }
 
     // Extract target address first
     const targetAddress = extractTargetFromRainbowData(trade.data);
-
-    // Analyze call data for potential backend issues
-    console.log(`\n🔬 CALL DATA ANALYSIS:`);
-    console.log(
-      `  - Method: ${trade.data.substring(0, 10)} (fillQuoteTokenToToken)`,
-    );
-    console.log(
-      `  - Data size: ${trade.data.length} chars (${Math.round(trade.data.length / 2)} bytes)`,
-    );
-    console.log(`  - Target aggregator: ${targetAddress}`);
-
-    // Compare with ODOS baseline if we have it
-    if (router === "okx") {
-      console.log(
-        `  - ODOS call data was ~1,482 chars, OKX is ${trade.data.length} chars`,
-      );
-      console.log(
-        `  - Size ratio: ${(trade.data.length / 1482).toFixed(1)}x larger than ODOS`,
-      );
-      console.log(
-        `  - This suggests much more complex routing or potential data bloat`,
-      );
-    }
-
-    // Step 2.5: Pre-validate target contract and Rainbow Router state
-    console.log(`\n2.5. Validating target contract and Rainbow Router...`);
-    console.log(`Target address: ${targetAddress}`);
 
     // Check if target contract exists and has reasonable state
     const targetCode = await hre.ethers.provider.getCode(targetAddress);
@@ -560,12 +485,10 @@ async function testRouter(
     try {
       const actualOwner = await Rainbow.owner();
       if (actualOwner.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
-        console.log(`⚠️  WARNING: Rainbow Router owner mismatch`);
-        console.log(`  - Expected: ${CONFIG.userWalletAddress}`);
-        console.log(`  - Actual: ${actualOwner}`);
+        console.log(`      ⚠️  Rainbow Router owner mismatch (expected: ${CONFIG.userWalletAddress}, actual: ${actualOwner})`);
       }
     } catch (ownerError: any) {
-      console.log(`  ❌ Could not check owner: ${ownerError.message}`);
+      console.log(`      ❌ Could not check owner: ${ownerError.message}`);
     }
 
     // Check target balances for liquidity warning
@@ -580,26 +503,21 @@ async function testRouter(
       targetEthBalance === 0n
     ) {
       console.log(
-        `⚠️  WARNING: Target contract has zero balances - this may cause liquidity issues`,
+        `      ⚠️  Target contract has zero balances - may cause liquidity issues`,
       );
     }
 
-    // Step 3: Whitelist target
-    console.log(`\n3. Checking target authorization...`);
+    // Setup: Whitelist target and signers
     const authSigner = mainnet ? testSigner : contractOwner;
     await ensureTargetIsWhitelisted(authSigner, Rainbow, targetAddress);
 
-    // Step 4: Whitelist signers if warrant exists
     if (rainbowExecution.warrant) {
-      console.log(`\n4. Checking signer authorization...`);
       const signerAddress = CONFIG.bypass
         ? ZERO_ADDRESS
         : rainbowExecution.warrant.verifyingSigner;
       await ensureSignerIsWhitelisted(authSigner, Rainbow, signerAddress);
     }
 
-    // Step 5: Whitelist test signer and backend signer
-    console.log(`\n5. Ensuring all signers are whitelisted...`);
     await ensureSignerIsWhitelisted(authSigner, Rainbow, testAddress);
     await ensureSignerIsWhitelisted(
       authSigner,
@@ -607,19 +525,14 @@ async function testRouter(
       BACKEND_WARRANT_SIGNER,
     );
 
-    // Step 6: Handle approvals if not using permits (skip for native ETH)
-    if (CONFIG.inToken.isNative) {
-      console.log(`\n6. Skipping approval (native ETH input)`);
-    } else if (!CONFIG.usePermit) {
-      console.log(`\n6. Handling ERC20 approval...`);
+    // Handle approvals if not using permits (skip for native ETH)
+    if (!CONFIG.inToken.isNative && !CONFIG.usePermit) {
       await handleERC20Approval(
         testSigner,
         inTokenContract,
         config.rainbowAddress,
         inputAmount,
       );
-    } else {
-      console.log(`\n6. Skipping ERC20 approval (using permits)`);
     }
 
     // Step 6.5: PRE-EXECUTION STATE CHECK (only show issues)
@@ -647,17 +560,13 @@ async function testRouter(
 
     // Only show diagnostics if there are issues
     if (issues.length > 0) {
-      console.log(`\n🔍 PRE-EXECUTION DIAGNOSTICS:`);
-      console.log(`❌ Issues found:`);
-      issues.forEach((issue) => console.log(`  - ${issue}`));
+      console.log(`      ❌ Issues:`);
+      issues.forEach((issue) => console.log(`         - ${issue}`));
     }
 
-    // Step 7: Pre-simulate transaction to catch errors early
-    console.log(`\n7. Pre-simulating ${router.toUpperCase()} transaction...`);
-
+    // Pre-simulate transaction to catch errors early
     let finalTradeData = trade.data;
     if (CONFIG.bypass && rainbowExecution.warrant) {
-      console.log("🔧 Rebuilding transaction with warrant bypass...");
       finalTradeData = rebuildTransactionDataWithModifiedWarrant(
         trade.data,
         rainbowExecution.warrant,
@@ -675,37 +584,16 @@ async function testRouter(
         value: modifiedTrade.value,
         from: testAddress,
       });
-      console.log(
-        `✅ Pre-simulation successful, gas: ${gasEstimate.toLocaleString()}`,
-      );
     } catch (simError: any) {
       // Simulation failed - log error and generate Tenderly data
-      console.log(`❌ Pre-simulation failed: ${simError.message}`);
-
-      // Generate Tenderly simulation data for failed simulations
-      console.log(`\n📊 TENDERLY SIMULATION DATA for ${router.toUpperCase()}:`);
-      console.log(`${"=".repeat(50)}`);
-      console.log(`To: ${modifiedTrade.to}`);
-      console.log(`From: ${testAddress}`);
-      console.log(`Data: ${modifiedTrade.data}`);
-      console.log(`Value: ${modifiedTrade.value}`);
-      console.log(`${"=".repeat(50)}`);
-      console.log(`\n📋 Copy the above data to Tenderly for simulation`);
+      console.log(`      ❌ Simulation failed: ${simError.message}`);
+      console.log(`         📊 Tenderly: To=${modifiedTrade.to}, From=${testAddress}, Value=${modifiedTrade.value}`);
 
       if (CONFIG.simulateOnly) {
-        console.log(
-          `\n⏸️  SIMULATION ONLY MODE - Not executing actual transaction`,
-        );
-        console.log(`❌ Pre-simulation failed with: ${simError.message}`);
-
         throw new Error(
-          `${router.toUpperCase()} pre-simulation failed: ${simError.message}`,
+          `Simulation failed: ${simError.message}`,
         );
       } else {
-        console.log(
-          `❌ Pre-simulation failed, executing actual transaction to get revert reason...`,
-        );
-
         // Execute actual transaction to get the real revert reason
         try {
           const gasLimit = gasEstimate || 500000;
@@ -716,69 +604,22 @@ async function testRouter(
             value: modifiedTrade.value,
             gasLimit: gasLimit,
           });
-          console.log(`Transaction sent: ${tx.hash}`);
-          console.log(`🌐 Live network transaction hash: ${tx.hash}`);
+          console.log(`      🔗 TX: ${tx.hash}`);
 
           await tx.wait();
-          console.log(`✅ Transaction succeeded unexpectedly!`);
         } catch (txError: any) {
-          console.log(`\n🔍 ACTUAL TRANSACTION REVERT REASON:`);
-          console.log(`  - Error: ${txError.message}`);
-          console.log(`  - Code: ${txError.code || "N/A"}`);
-          console.log(`  - Data: ${txError.data || "N/A"}`);
-          console.log(`  - Reason: ${txError.reason || "N/A"}`);
-
-          // Try to decode the revert reason
-          if (txError.data && txError.data.startsWith("0x")) {
-            try {
-              if (txError.data.length >= 10) {
-                const decoded = hre.ethers.AbiCoder.defaultAbiCoder().decode(
-                  ["string"],
-                  "0x" + txError.data.slice(10),
-                );
-                console.log(`  - DECODED REVERT: "${decoded[0]}"`);
-              }
-            } catch {
-              console.log(`  - Could not decode revert data`);
-            }
-          }
-
-          // Enhanced error message with actual revert
-          const actualRevert =
-            txError.reason ||
-            (txError.data ? "See decoded revert above" : "Unknown");
-
-          // Additional context for debugging backend vs contract issues
-          console.log(`\n💡 DEBUGGING CONTEXT:`);
-          console.log(
-            `  - If this is a backend service issue: try getting a fresh quote and see if it works`,
-          );
-          console.log(
-            `  - If this is a router-specific issue: the error will persist with fresh quotes`,
-          );
-          console.log(
-            `  - Call data size: ${trade.data.length} chars suggests routing complexity`,
-          );
-          console.log(
-            `  - Use Tenderly data above to simulate and debug the transaction`,
-          );
+          console.log(`      ❌ TX reverted: ${txError.reason || txError.message}`);
+          console.log(`         📊 Tenderly: To=${modifiedTrade.to}, From=${testAddress}, Value=${modifiedTrade.value}`);
 
           throw new Error(
-            `${router.toUpperCase()} transaction reverted: ${actualRevert}`,
+            `Transaction reverted: ${txError.reason || txError.message}`,
           );
         }
       }
     }
 
-    // Step 8: Execute transaction (if not simulation only)
+    // Execute transaction (if not simulation only)
     if (CONFIG.simulateOnly) {
-      console.log(
-        `\n8. ⏸️  SIMULATION ONLY MODE - Skipping actual transaction execution`,
-      );
-      console.log(
-        `✅ Pre-simulation passed - transaction would likely succeed`,
-      );
-
       return {
         router,
         success: true,
@@ -792,9 +633,6 @@ async function testRouter(
         },
       };
     } else {
-      console.log(
-        `\n8. Executing ${router.toUpperCase()} swap on LIVE NETWORK...`,
-      );
       const executionResult = await executeRainbowTransaction(
         testSigner,
         modifiedTrade,

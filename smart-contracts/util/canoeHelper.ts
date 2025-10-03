@@ -49,7 +49,6 @@ export interface TestSetup {
 }
 
 export const setupTestEnvironment = async (usePermit: boolean = false, bypass: boolean = false): Promise<TestSetup> => {
-    console.log("🔧 Setting up test environment...");
     const networkName = hre.network.name;
     const config = getNetworkConfig(networkName);
     let mainnet = true;
@@ -88,13 +87,11 @@ export const setupTestEnvironment = async (usePermit: boolean = false, bypass: b
         console.log("Impersonated contract owner:", config.ownerAddr);
         
     } else {
-        console.log("RUNNING ON LIVE NETWORK:", networkName);
         const signers = await hre.ethers.getSigners();
         testSigner = signers[0];
         contractOwner = signers[0];
         
         const testAddress = await testSigner.getAddress();
-        console.log("Using account:", testAddress);
         
         if (testAddress.toLowerCase() !== config.ownerAddr.toLowerCase()) {
             console.warn(`⚠️  Warning: Expected testing account ${config.ownerAddr}, got ${testAddress}`);
@@ -154,12 +151,7 @@ const fundTestAccountWithUSDC = async (testSigner: Signer, USDC: IERC20, config:
 const checkLiveAccountBalances = async (testSigner: Signer, USDC: IERC20, WETH: IERC20) => {
     const testAddress = await testSigner.getAddress();
     const usdcBalance = await USDC.balanceOf(testAddress);
-    const wethBalance = await WETH.balanceOf(testAddress);
-    
-    console.log(`💰 Live account balances:`);
-    console.log(`  USDC: ${formatUnits(usdcBalance, 6)}`);
-    console.log(`  WETH: ${formatUnits(wethBalance, 18)}`);
-    
+
     const requiredAmount = parseUnits("5", 6);
     if (usdcBalance < requiredAmount) {
         throw new Error(`Insufficient USDC balance. Need: ${formatUnits(requiredAmount, 6)} USDC, Have: ${formatUnits(usdcBalance, 6)} USDC`);
@@ -171,7 +163,6 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
     const url = baseUrl || `http://localhost:3333/market/${market}/swap_quote`;
 
     try {
-        console.log(`Fetching ${market.toUpperCase()} quote from:`, url);
         const response = await axios.post(url, params);
         return response.data;
     } catch (error: any) {
@@ -217,7 +208,6 @@ export const getRainbowExecution = async (
 
 
     try {
-        console.log(`Fetching ${market.toUpperCase()} Rainbow execution info from:`, url);
         const response = await axios.post(url, requestBody);
         return response.data as RainbowExecutionInfo;
     } catch (error: any) {
@@ -234,12 +224,10 @@ export const getRainbowExecution = async (
 
 // Contract interaction helpers
 export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: RainbowRouter, targetAddress: string) => {
-    console.log(`Checking if target ${targetAddress} is whitelisted...`);
     
     const isWhitelisted = await Rainbow.swapTargets(targetAddress);
     
     if (isWhitelisted) {
-        console.log("✅ Target is already whitelisted");
         return;
     }
     
@@ -263,12 +251,10 @@ export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: Ra
 };
 
 export const ensureSignerIsWhitelisted = async (ownerSigner: Signer, Rainbow: RainbowRouter, signerAddress: string) => {
-    console.log(`Checking if signer ${signerAddress} is whitelisted...`);
     
     const isWhitelisted = await Rainbow.validSigners(signerAddress);
     
     if (isWhitelisted) {
-        console.log("✅ Signer is already whitelisted");
         return;
     }
     
@@ -346,7 +332,6 @@ export const extractTargetFromRainbowData = (txData: string): string => {
         
         throw new Error("Could not extract target address from transaction data");
     } catch (error: any) {
-        console.warn("Failed to decode transaction data, using fallback method");
         return "0x6A000F20005980200259B80c5102003040001068"; // Known fallback address
     }
 };
