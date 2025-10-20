@@ -48,7 +48,7 @@ export interface TestSetup {
     config: NetworkConfig;
 }
 
-export const setupTestEnvironment = async (usePermit: boolean = false, bypass: boolean = false): Promise<TestSetup> => {
+export const setupTestEnvironment = async (): Promise<TestSetup> => {
     const networkName = hre.network.name;
     const config = getNetworkConfig(networkName);
     let mainnet = true;

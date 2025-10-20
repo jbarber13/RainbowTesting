@@ -37,13 +37,10 @@ import {
   ensureSignerIsWhitelisted,
   handleERC20Approval,
   extractTargetFromRainbowData,
-  rebuildTransactionDataWithModifiedWarrant,
   executeRainbowTransaction,
   reportBalanceChanges,
-  ZERO_ADDRESS,
   BACKEND_WARRANT_SIGNER,
   TestSetup,
-  getNetworkConfig,
 } from "../util/canoeHelper";
 import { canoeParams } from "../util/canoeHelper";
 import { Token } from "./canoeInterface";
@@ -61,7 +58,6 @@ interface TokenConfig {
 
 interface TestConfig {
   // Execution settings
-  bypass: boolean; // Bypass warrant validation
   usePermit: boolean; // Use ERC-2612 permits
   simulateOnly: boolean; // Simulation only (no actual transactions)
 
@@ -88,7 +84,6 @@ const TEST_CONFIGS: TestConfig[] = [
   // Test 1: USDC → WETH (ERC20 → ERC20 with permits)
   {
     // Execution settings
-    bypass: false,
     usePermit: true,
     simulateOnly: true,
 
@@ -129,7 +124,6 @@ const TEST_CONFIGS: TestConfig[] = [
 
   // Test 2: ETH → WETH (Native ETH as input)
   {
-    bypass: false,
     usePermit: false, // No permits needed for native ETH
     simulateOnly: true,
 
@@ -165,7 +159,6 @@ const TEST_CONFIGS: TestConfig[] = [
 
   // Test 3: USDC → ETH (Native ETH as output)
   {
-    bypass: false,
     usePermit: true, // Permits for USDC input
     simulateOnly: true,
 
@@ -281,7 +274,7 @@ async function main() {
     // Test each router with fresh setup
     for (const router of CONFIG.routers) {
       try {
-        const setup = await setupTestEnvironment(CONFIG.usePermit, CONFIG.bypass);
+        const setup = await setupTestEnvironment();
 
         // Verify the signer matches our dev wallet
         const testAddress = await setup.testSigner.getAddress();
@@ -443,12 +436,6 @@ async function testRouter(
       permitSignature,
     );
 
-    // Apply bypass if enabled
-    if (CONFIG.bypass && rainbowExecution.warrant) {
-      console.log(`      🔧 Bypass mode: using zero address signer`);
-      rainbowExecution.warrant.verifyingSigner = ZERO_ADDRESS;
-    }
-
     // Get trade data
     const trade =
       rainbowExecution.trade || rainbowExecution.executionInformation?.trade;
@@ -512,9 +499,7 @@ async function testRouter(
     await ensureTargetIsWhitelisted(authSigner, Rainbow, targetAddress);
 
     if (rainbowExecution.warrant) {
-      const signerAddress = CONFIG.bypass
-        ? ZERO_ADDRESS
-        : rainbowExecution.warrant.verifyingSigner;
+      const signerAddress = rainbowExecution.warrant.verifyingSigner;
       await ensureSignerIsWhitelisted(authSigner, Rainbow, signerAddress);
     }
 
@@ -565,15 +550,7 @@ async function testRouter(
     }
 
     // Pre-simulate transaction to catch errors early
-    let finalTradeData = trade.data;
-    if (CONFIG.bypass && rainbowExecution.warrant) {
-      finalTradeData = rebuildTransactionDataWithModifiedWarrant(
-        trade.data,
-        rainbowExecution.warrant,
-      );
-    }
-
-    const modifiedTrade = { ...trade, data: finalTradeData };
+    const modifiedTrade = trade;
 
     // Try simulation first, but if it fails, execute actual transaction to get real revert
     let gasEstimate: bigint | undefined;
