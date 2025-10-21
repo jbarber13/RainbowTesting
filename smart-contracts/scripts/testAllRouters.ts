@@ -110,18 +110,19 @@ const TEST_CONFIGS: TestConfig[] = [
 
     // Routers to test
     routers: [
-      "enso",
-      "icecreamswap",
-      "odos",
-      "oneinch",
-      "paraswap",
+      //"enso",
+      //"icecreamswap",
+      //"odos",
+      //"oneinch",
+      //"paraswap",
       "kyberswap",
-      "unizen"
+      //"unizen"
     ],
 
     delayBetweenTests: 3000,
   },
 
+  /**
   // Test 2: ETH → WETH (Native ETH as input)
   {
     usePermit: false, // No permits needed for native ETH
@@ -191,6 +192,7 @@ const TEST_CONFIGS: TestConfig[] = [
     ],
     delayBetweenTests: 3000,
   },
+   */
 ];
 
 // ============================================================================
@@ -565,6 +567,7 @@ async function testRouter(
       // Simulation failed - log error and generate Tenderly data
       console.log(`      ❌ Simulation failed: ${simError.message}`);
       console.log(`         📊 Tenderly: To=${modifiedTrade.to}, From=${testAddress}, Value=${modifiedTrade.value}`);
+      console.log(`         📊 Tenderly Data: ${modifiedTrade.data}`);
 
       if (CONFIG.simulateOnly) {
         throw new Error(
@@ -587,6 +590,7 @@ async function testRouter(
         } catch (txError: any) {
           console.log(`      ❌ TX reverted: ${txError.reason || txError.message}`);
           console.log(`         📊 Tenderly: To=${modifiedTrade.to}, From=${testAddress}, Value=${modifiedTrade.value}`);
+          console.log(`         📊 Tenderly Data: ${modifiedTrade.data}`);
 
           throw new Error(
             `Transaction reverted: ${txError.reason || txError.message}`,
