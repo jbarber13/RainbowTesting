@@ -6,6 +6,7 @@ import { IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
 import axios from "axios";
 import { ExecutionRequest, Coupon, Token, RainbowExecutionInfo } from "../scripts/canoeInterface";
 import { generatePermitSignature } from "../scripts/msc";
+import { NETWORK_CONFIGS } from "./networkConfig";
 
 // Re-export all the types and interfaces from the original canoeHelper
 export * from "../scripts/canoeHelper";
@@ -27,14 +28,30 @@ export interface NetworkConfig {
 }
 
 export const getNetworkConfig = (networkName: string): NetworkConfig => {
-    // Default to Optimism config - can be extended for other networks
+    // Get centralized network config
+    const centralConfig = NETWORK_CONFIGS[networkName];
+
+    if (!centralConfig) {
+        // Default to Optimism config if network not found
+        console.warn(`⚠️  Network ${networkName} not found in centralized config, defaulting to Optimism`);
+        return {
+            rainbowAddress: "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A",
+            ownerAddr: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
+            usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+            wethAddress: "0x4200000000000000000000000000000000000006",
+            usdcWhale: "0xc0E17AD342AFABD36b3971F8305fF147006962ae",
+            forkUrl: process.env.OP_URL!
+        };
+    }
+
+    // Map centralized config to local NetworkConfig format
     return {
-        rainbowAddress: "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A",
-        ownerAddr: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0", // Updated: ownership transferred to dev wallet
-        usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-        wethAddress: "0x4200000000000000000000000000000000000006",
-        usdcWhale: "0xc0E17AD342AFABD36b3971F8305fF147006962ae",
-        forkUrl: process.env.OP_URL!
+        rainbowAddress: centralConfig.rainbowRouterAddress,
+        ownerAddr: centralConfig.ownerAddress,
+        usdcAddress: centralConfig.usdcAddress || "0x0000000000000000000000000000000000000000",
+        wethAddress: centralConfig.wethAddress,
+        usdcWhale: networkName === "op" ? "0xc0E17AD342AFABD36b3971F8305fF147006962ae" : "0x0000000000000000000000000000000000000000", // Only known for Optimism
+        forkUrl: centralConfig.rpcUrl || process.env.OP_URL!
     };
 };
 
@@ -107,7 +124,8 @@ export const setupTestEnvironment = async (): Promise<TestSetup> => {
     if (!mainnet) {
         await fundTestAccountWithUSDC(testSigner, USDC, config);
     } else {
-        await checkLiveAccountBalances(testSigner, USDC, WETH);
+        // Skip balance check for live networks - let the test handle insufficient balance errors
+        // await checkLiveAccountBalances(testSigner, USDC, WETH);
     }
 
     return {
@@ -319,20 +337,27 @@ export const extractTargetFromRainbowData = (txData: string): string => {
     try {
         const rainbowInterface = RainbowRouter__factory.createInterface();
         const decoded = rainbowInterface.parseTransaction({ data: txData });
-        
-        if (decoded?.name === "fillQuoteTokenToToken") {
-            return decoded.args[2] as string;
+
+        if (!decoded) {
+            throw new Error("Failed to decode transaction data");
         }
-        
-        // Fallback: look for common patterns
-        const match = txData.match(/6a000f20[0-9a-f]{32}/i);
-        if (match) {
-            return "0x" + match[0];
+
+        // Handle different Rainbow Router function signatures
+        if (decoded.name === "fillQuoteTokenToToken" ||
+            decoded.name === "fillQuoteTokenToTokenWithPermit" ||
+            decoded.name === "fillQuoteEthToToken" ||
+            decoded.name === "fillQuoteTokenToEth") {
+            // For all fillQuote functions, target is the 3rd parameter (index 2)
+            const target = decoded.args[2] as string;
+            if (!target || target === "0x0000000000000000000000000000000000000000") {
+                throw new Error(`Invalid target address extracted: ${target}`);
+            }
+            return target;
         }
-        
-        throw new Error("Could not extract target address from transaction data");
+
+        throw new Error(`Unsupported function: ${decoded.name}`);
     } catch (error: any) {
-        return "0x6A000F20005980200259B80c5102003040001068"; // Known fallback address
+        throw new Error(`Failed to extract target from Rainbow data: ${error.message}`);
     }
 };
 

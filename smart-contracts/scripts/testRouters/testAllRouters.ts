@@ -81,26 +81,26 @@ interface TestConfig {
 
 // Test configurations - add multiple test scenarios here
 const TEST_CONFIGS: TestConfig[] = [
-  // Test 1: USDC → WETH (ERC20 → ERC20 with permits)
+  // Test 1: ETH → WETH on Worldchain (Native ETH as input)
   {
     // Execution settings
-    usePermit: true,
+    usePermit: false, // No permits needed for native ETH
     simulateOnly: true,
 
     // Network settings
-    chain: "optimism",
-    chainId: 10,
+    chain: "worldchain",
+    chainId: 480,
     userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
 
     // Trade settings
-    testAmount: "5",
+    testAmount: "0.001", // 0.001 ETH
     slippage: 1000, // 10%
 
     // Token pair
     inToken: {
-      symbol: "USDC",
-      decimals: 6,
-      isNative: false,
+      symbol: "ETH",
+      decimals: 18,
+      isNative: true,
     },
     outToken: {
       symbol: "WETH",
@@ -110,13 +110,9 @@ const TEST_CONFIGS: TestConfig[] = [
 
     // Routers to test
     routers: [
-      //"enso",
-      //"icecreamswap",
-      //"odos",
-      //"oneinch",
-      //"paraswap",
+      "enso",
+      "icecreamswap",
       "kyberswap",
-      //"unizen"
     ],
 
     delayBetweenTests: 3000,
