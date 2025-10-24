@@ -62,9 +62,9 @@ const CONFIG = {
   // Supported routers
   routers: [
     "kyberswap",
-    //"enso",
-    //"odos",
-    //"oneinch",
+    "enso",
+    "odos",
+    "oneinch",
   ],
 
   /**
@@ -83,7 +83,7 @@ const CONFIG = {
 
   // Test configurations - array of trade pairs to test
   trades: [
-    /**
+    
     {
       name: "USDC → WETH",
       inToken: "USDC",
@@ -91,7 +91,6 @@ const CONFIG = {
       testAmount: "1", // 1 USDC
       usePermit: true, // USDC supports EIP-2612 permits
     },
-     */
     {
       name: "WETH → USDC",
       inToken: "WETH",
