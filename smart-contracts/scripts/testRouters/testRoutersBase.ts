@@ -61,13 +61,48 @@ const CONFIG = {
 
   // Supported routers
   routers: [
-    "kyberswap"
+    "kyberswap",
+    //"enso",
+    //"odos",
+    //"oneinch",
+  ],
+
+  /**
+  Enso: 0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf
+  Icecreamswap: 0xBb5e1777A331ED93E07cF043363e48d320eb96c4
+  Oks: 0x5e2F47bD7D4B357fCfd0Bb224Eb665773B1B9801
+  Odos: 0x19cEeAd7105607Cd444F5ad10dd51356436095a1
+  1inch: 0x111111125421cA6dc452d289314280a0f8842A65\
+  OpenOcean: 0x6352a56caadc4f1e25cd6c75970fa768a3304e64
+  Velora: 0x6A000F20005980200259B80c5102003040001068
+  Unison: 0xef58B643240178c2BC37681f8d4E50d7Ec37Ee22
+  Luxor: 0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD
+  0x (permit2): 0x000000000022D473030F116dDEE9F6B43aC78BA3
+  Kyberswap: 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5
+   */
+
+  // Test configurations - array of trade pairs to test
+  trades: [
+    /**
+    {
+      name: "USDC → WETH",
+      inToken: "USDC",
+      outToken: "WETH",
+      testAmount: "1", // 1 USDC
+      usePermit: true, // USDC supports EIP-2612 permits
+    },
+     */
+    {
+      name: "WETH → USDC",
+      inToken: "WETH",
+      outToken: "USDC",
+      testAmount: "0.0003", // 0.0003 WETH (~$1.20)
+      usePermit: false, // WETH on Base does NOT support EIP-2612 permits
+    },
   ],
 
   // Test settings
-  testAmount: "0.001", // 0.001 ETH
   slippage: 1000, // 10%
-  usePermit: false, // No permits needed for native ETH
   simulateOnly: true,
   delayBetweenTests: 3000, // 3 seconds
 };
@@ -77,6 +112,7 @@ const CONFIG = {
 // ============================================================================
 
 interface RouterTestResult {
+  tradeName: string;
   router: string;
   success: boolean;
   error?: string;
@@ -94,61 +130,76 @@ async function main() {
   console.log("🚀 Testing Base Routers\n");
   console.log(`Network: ${CONFIG.chain} (chainId: ${CONFIG.chainId})`);
   console.log(`Rainbow Router: ${CONFIG.rainbowRouterAddress}`);
-  console.log(`Test: ${CONFIG.testAmount} ETH → WETH`);
+  console.log(`Trades to test: ${CONFIG.trades.length}`);
   console.log(`Routers to test: ${CONFIG.routers.length}\n`);
 
-  const results: RouterTestResult[] = [];
+  const allResults: Map<string, RouterTestResult[]> = new Map();
 
-  // Test each router
-  for (const router of CONFIG.routers) {
-    try {
-      const setup = await setupTestEnvironment();
+  // Test each trade configuration
+  for (const trade of CONFIG.trades) {
+    console.log(`\n📋 Testing ${trade.name} (${CONFIG.routers.length} routers)`);
+    const results: RouterTestResult[] = [];
 
-      // Verify the signer matches our dev wallet
-      const testAddress = await setup.testSigner.getAddress();
-      if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
-        throw new Error(
-          `Expected wallet ${CONFIG.userWalletAddress}, but got ${testAddress}`,
-        );
+    // Test each router for this trade
+    for (const router of CONFIG.routers) {
+      try {
+        const setup = await setupTestEnvironment();
+
+        // Verify the signer matches our dev wallet
+        const testAddress = await setup.testSigner.getAddress();
+        if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
+          throw new Error(
+            `Expected wallet ${CONFIG.userWalletAddress}, but got ${testAddress}`,
+          );
+        }
+
+        const result = await testRouter(router, setup, trade);
+        results.push(result);
+
+        if (result.success) {
+          console.log(`  ✅ ${router}`);
+        } else {
+          console.log(`  ❌ ${router}: ${result.error}`);
+        }
+      } catch (error: any) {
+        console.log(`  ❌ ${router}: ${error.message}`);
+        results.push({
+          tradeName: trade.name,
+          router,
+          success: false,
+          error: error.message,
+        });
       }
 
-      const result = await testRouter(router, setup);
-      results.push(result);
-
-      if (result.success) {
-        console.log(`  ✅ ${router}`);
-      } else {
-        console.log(`  ❌ ${router}: ${result.error}`);
+      // Add delay between tests
+      if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
       }
-    } catch (error: any) {
-      console.log(`  ❌ ${router}: ${error.message}`);
-      results.push({
-        router,
-        success: false,
-        error: error.message,
-      });
     }
 
-    // Add delay between tests
-    if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
+    allResults.set(trade.name, results);
+
+    // Add delay between trade configurations
+    if (CONFIG.trades.indexOf(trade) < CONFIG.trades.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 
-  // Print summary
-  printTestSummary(results);
+  // Print comprehensive summary
+  printTestSummary(allResults);
 }
 
 async function testRouter(
   router: string,
   setup: TestSetup,
+  tradeConfig: typeof CONFIG.trades[0],
 ): Promise<RouterTestResult> {
   const { testSigner, contractOwner, mainnet, Rainbow } = setup;
   const testAddress = await testSigner.getAddress();
 
-  // Use ETH → WETH for this test
-  const inToken = CONFIG.tokens.ETH;
-  const outToken = CONFIG.tokens.WETH;
+  // Get tokens from the trade configuration
+  const inToken = CONFIG.tokens[tradeConfig.inToken as keyof typeof CONFIG.tokens];
+  const outToken = CONFIG.tokens[tradeConfig.outToken as keyof typeof CONFIG.tokens];
 
   // Create token objects for API
   const originalInToken: Token = {
@@ -166,7 +217,7 @@ async function testRouter(
   };
 
   // Set up test parameters
-  const inputAmount = parseUnits(CONFIG.testAmount, inToken.decimals);
+  const inputAmount = parseUnits(tradeConfig.testAmount, inToken.decimals);
   const params: canoeParams = {
     chain: CONFIG.chain,
     account: CONFIG.rainbowRouterAddress,
@@ -174,17 +225,28 @@ async function testRouter(
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
-    inTokenAmount: CONFIG.testAmount,
+    inTokenAmount: tradeConfig.testAmount,
     slippage: CONFIG.slippage,
     useRainbow: true,
     getCalldata: true,
-    usePermit: CONFIG.usePermit
+    usePermit: tradeConfig.usePermit
   };
 
+  // Get token contracts for balance checking
+  const inTokenContract = inToken.isNative
+    ? null
+    : IERC20__factory.connect(inToken.address, testSigner);
+  const outTokenContract = outToken.isNative
+    ? null
+    : IERC20__factory.connect(outToken.address, testSigner);
+
   // Get initial balances
-  const WETH = IERC20__factory.connect(outToken.address, testSigner);
-  const initialInTokenBalance = await hre.ethers.provider.getBalance(testAddress);
-  const initialOutTokenBalance = await WETH.balanceOf(testAddress);
+  const initialInTokenBalance = inToken.isNative
+    ? await hre.ethers.provider.getBalance(testAddress)
+    : await inTokenContract!.balanceOf(testAddress);
+  const initialOutTokenBalance = outToken.isNative
+    ? await hre.ethers.provider.getBalance(testAddress)
+    : await outTokenContract!.balanceOf(testAddress);
 
   try {
     // Step 1: Get quote
@@ -192,6 +254,21 @@ async function testRouter(
 
     if (!quoteResponse || !quoteResponse.coupon) {
       throw new Error("Failed to get valid quote response");
+    }
+
+    // Step 1.5: Sign permit if requested and rainbowPermitRequest exists
+    let permitSignature: string | undefined;
+    if (tradeConfig.usePermit && quoteResponse.rainbowPermitRequest) {
+      const permitRequest = quoteResponse.rainbowPermitRequest;
+      try {
+        permitSignature = await testSigner.signTypedData(
+          permitRequest.domain,
+          permitRequest.types,
+          permitRequest.message
+        );
+      } catch (error: any) {
+        throw new Error(`Permit signing failed: ${error.message}`);
+      }
     }
 
     // Step 2: Get Rainbow execution
@@ -209,8 +286,8 @@ async function testRouter(
       executionRequest.inToken,
       executionRequest.outToken,
       executionRequest.inputAmount,
-      CONFIG.usePermit,
-      undefined, // no permit signature for native ETH
+      tradeConfig.usePermit,
+      permitSignature,
     );
 
     // Get trade data
@@ -243,6 +320,26 @@ async function testRouter(
       BACKEND_WARRANT_SIGNER,
     );
 
+    // Handle approvals if not using permits (for ERC20 tokens only)
+    if (!tradeConfig.usePermit && !inToken.isNative && inTokenContract) {
+      await handleERC20Approval(
+        testSigner,
+        inTokenContract,
+        CONFIG.rainbowRouterAddress,
+        inputAmount,
+        inToken.symbol,
+        inToken.decimals,
+      );
+
+      // Debug: Check balance
+      const balance = await inTokenContract.balanceOf(testAddress);
+      console.log(`  User ${inToken.symbol} balance: ${formatUnits(balance, inToken.decimals)} ${inToken.symbol}`);
+      console.log(`  Required amount: ${formatUnits(inputAmount, inToken.decimals)} ${inToken.symbol}`);
+      if (balance < inputAmount) {
+        console.log(`  ⚠️ WARNING: Insufficient balance!`);
+      }
+    }
+
     // Pre-simulate transaction
     const modifiedTrade = trade;
     let gasEstimate: bigint | undefined;
@@ -267,6 +364,7 @@ async function testRouter(
     // Execute transaction (if not simulation only)
     if (CONFIG.simulateOnly) {
       return {
+        tradeName: tradeConfig.name,
         router,
         success: true,
         gasUsed: gasEstimate?.toString(),
@@ -289,14 +387,15 @@ async function testRouter(
 
       const balanceChanges = await reportBalanceChanges(
         testSigner,
-        WETH, // Using WETH as both contracts (will handle properly)
-        WETH,
+        inTokenContract || outTokenContract!,
+        outTokenContract || inTokenContract!,
         initialInTokenBalance,
         initialOutTokenBalance,
         quoteResponse,
       );
 
       return {
+        tradeName: tradeConfig.name,
         router,
         success: true,
         gasUsed: executionResult.gasUsed,
@@ -311,6 +410,7 @@ async function testRouter(
     }
   } catch (error: any) {
     return {
+      tradeName: tradeConfig.name,
       router,
       success: false,
       error: error.message,
@@ -318,28 +418,41 @@ async function testRouter(
   }
 }
 
-function printTestSummary(results: RouterTestResult[]) {
+function printTestSummary(allResults: Map<string, RouterTestResult[]>) {
   console.log(`\n${"=".repeat(80)}`);
-  console.log(`📊 BASE TEST RESULTS`);
+  console.log(`📊 BASE TEST RESULTS - ALL TRADES`);
   console.log(`${"=".repeat(80)}`);
 
-  const successful = results.filter((r) => r.success);
-  const failed = results.filter((r) => !r.success);
+  let totalTests = 0;
+  let totalSuccess = 0;
+  let totalFailed = 0;
 
-  console.log(`\n✅ Success: ${successful.length}/${results.length}`);
-  console.log(`❌ Failed: ${failed.length}/${results.length}`);
+  allResults.forEach((results, tradeName) => {
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
 
-  if (successful.length > 0) {
-    console.log(`\n✓ Working Routers:`);
-    successful.forEach(r => console.log(`  - ${r.router}`));
-  }
+    totalTests += results.length;
+    totalSuccess += successful.length;
+    totalFailed += failed.length;
 
-  if (failed.length > 0) {
-    console.log(`\n✗ Failed Routers:`);
-    failed.forEach(r => console.log(`  - ${r.router}: ${r.error}`));
-  }
+    console.log(`\n📋 ${tradeName}:`);
+    console.log(`  ✅ Success: ${successful.length}/${results.length}`);
+    console.log(`  ❌ Failed: ${failed.length}/${results.length}`);
+
+    if (successful.length > 0) {
+      console.log(`  ✓ Working: ${successful.map(r => r.router).join(", ")}`);
+    }
+    if (failed.length > 0) {
+      console.log(`  ✗ Failed: ${failed.map(r => r.router).join(", ")}`);
+    }
+  });
 
   console.log(`\n${"=".repeat(80)}`);
+  console.log(`📈 OVERALL SUMMARY:`);
+  console.log(`  Total Tests: ${totalTests}`);
+  console.log(`  ✅ Successful: ${totalSuccess} (${((totalSuccess / totalTests) * 100).toFixed(1)}%)`);
+  console.log(`  ❌ Failed: ${totalFailed} (${((totalFailed / totalTests) * 100).toFixed(1)}%)`);
+  console.log(`${"=".repeat(80)}`);
 }
 
 main().catch(console.error);

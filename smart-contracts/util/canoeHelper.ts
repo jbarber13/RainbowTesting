@@ -224,10 +224,28 @@ export const getRainbowExecution = async (
         }
     }
 
+    // Debug logging
+    console.log(`      [DEBUG] getRainbowExecution - usePermit: ${usePermit}`);
+    console.log(`      [DEBUG] Request body has permitSignature: ${!!requestBody.permitSignature}`);
+    console.log(`      [DEBUG] Request body has signingRequest: ${!!requestBody.signingRequest}`);
 
     try {
         const response = await axios.post(url, requestBody);
-        return response.data as RainbowExecutionInfo;
+        const executionInfo = response.data as RainbowExecutionInfo;
+
+        // Debug: Log the function being called
+        const trade = executionInfo.trade || executionInfo.executionInformation?.trade;
+        if (trade?.data) {
+            try {
+                const rainbowInterface = RainbowRouter__factory.createInterface();
+                const decoded = rainbowInterface.parseTransaction({ data: trade.data });
+                console.log(`      [DEBUG] Rainbow Router function: ${decoded?.name || 'UNKNOWN'}`);
+            } catch (e) {
+                console.log(`      [DEBUG] Could not decode Rainbow Router function`);
+            }
+        }
+
+        return executionInfo;
     } catch (error: any) {
         console.error(`❌ Error fetching ${market} Rainbow execution info:`);
         if (axios.isAxiosError(error)) {
@@ -295,36 +313,44 @@ export const ensureSignerIsWhitelisted = async (ownerSigner: Signer, Rainbow: Ra
     }
 };
 
-export const handleERC20Approval = async (signer: Signer, USDC: IERC20, spenderAddress: string, amount: BigNumberish) => {
+export const handleERC20Approval = async (
+    signer: Signer,
+    token: IERC20,
+    spenderAddress: string,
+    amount: BigNumberish,
+    tokenSymbol: string = "TOKEN",
+    tokenDecimals: number = 18
+) => {
     const signerAddress = await signer.getAddress();
-    
-    console.log(`  Token to approve: USDC (${await USDC.getAddress()})`);
-    console.log(`  Amount to approve: ${formatUnits(amount, 6)} USDC`);
+    const tokenAddress = await token.getAddress();
+
+    console.log(`  Token to approve: ${tokenSymbol} (${tokenAddress})`);
+    console.log(`  Amount to approve: ${formatUnits(amount, tokenDecimals)} ${tokenSymbol}`);
     console.log(`  Spender: ${spenderAddress}`);
     console.log(`  Owner: ${signerAddress}`);
-    
-    const currentAllowance = await USDC.allowance(signerAddress, spenderAddress);
-    console.log(`  Current allowance: ${formatUnits(currentAllowance, 6)} USDC`);
-    
+
+    const currentAllowance = await token.allowance(signerAddress, spenderAddress);
+    console.log(`  Current allowance: ${formatUnits(currentAllowance, tokenDecimals)} ${tokenSymbol}`);
+
     if (currentAllowance >= BigInt(amount.toString())) {
         console.log(`✅ Sufficient allowance already exists`);
         return;
     }
-    
+
     console.log(`❌ Insufficient allowance. Approving tokens...`);
-    
+
     try {
-        const approveTx = await USDC.connect(signer).approve(spenderAddress, amount);
+        const approveTx = await token.connect(signer).approve(spenderAddress, amount);
         console.log(`📤 Approval transaction sent: ${approveTx.hash}`);
-        
+
         const receipt = await approveTx.wait();
         console.log(`✅ Approval transaction confirmed in block ${receipt!.blockNumber}`);
-        
-        const newAllowance = await USDC.allowance(signerAddress, spenderAddress);
-        console.log(`✅ New allowance: ${formatUnits(newAllowance, 6)} USDC`);
-        
+
+        const newAllowance = await token.allowance(signerAddress, spenderAddress);
+        console.log(`✅ New allowance: ${formatUnits(newAllowance, tokenDecimals)} ${tokenSymbol}`);
+
         if (newAllowance < BigInt(amount.toString())) {
-            throw new Error(`Approval failed: expected ${formatUnits(amount, 6)}, got ${formatUnits(newAllowance, 6)}`);
+            throw new Error(`Approval failed: expected ${formatUnits(amount, tokenDecimals)}, got ${formatUnits(newAllowance, tokenDecimals)}`);
         }
     } catch (error: any) {
         console.error(`❌ Approval failed: ${error.message}`);

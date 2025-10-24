@@ -68,7 +68,7 @@ const CONFIG = {
   // Supported routers
   routers: [
     "icecreamswap",
-    //"enso",//bug returning base chain augustus router?
+    "enso",//bug returning base chain augustus router?
     //"kyberswap"//api says not supported
   ],
 
@@ -316,6 +316,8 @@ async function testRouter(
         inTokenContract,
         CONFIG.rainbowRouterAddress,
         inputAmount,
+        inToken.symbol,
+        inToken.decimals,
       );
     }
 
