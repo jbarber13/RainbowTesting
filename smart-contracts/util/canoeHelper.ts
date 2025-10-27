@@ -260,22 +260,27 @@ export const getRainbowExecution = async (
 
 // Contract interaction helpers
 export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: RainbowRouter, targetAddress: string) => {
-    
+    // Skip validation for native ETH placeholder address
+    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+    if (targetAddress.toLowerCase() === ETH_PLACEHOLDER.toLowerCase()) {
+        return;
+    }
+
     const isWhitelisted = await Rainbow.swapTargets(targetAddress);
-    
+
     if (isWhitelisted) {
         return;
     }
-    
+
     console.log("❌ Target not whitelisted. Adding to whitelist...");
-    
+
     try {
         const tx = await Rainbow.connect(ownerSigner).updateSwapTargets(targetAddress, true);
         await tx.wait();
-        
+
         console.log("✅ Target successfully whitelisted!");
         console.log(`Transaction hash: ${tx.hash}`);
-        
+
         const nowWhitelisted = await Rainbow.swapTargets(targetAddress);
         if (!nowWhitelisted) {
             throw new Error("Target whitelisting verification failed");
@@ -370,11 +375,18 @@ export const extractTargetFromRainbowData = (txData: string): string => {
 
         // Handle different Rainbow Router function signatures
         if (decoded.name === "fillQuoteTokenToToken" ||
-            decoded.name === "fillQuoteTokenToTokenWithPermit" ||
-            decoded.name === "fillQuoteEthToToken" ||
-            decoded.name === "fillQuoteTokenToEth") {
-            // For all fillQuote functions, target is the 3rd parameter (index 2)
+            decoded.name === "fillQuoteTokenToTokenWithPermit") {
+            // For token-to-token functions, target is the 3rd parameter (index 2)
             const target = decoded.args[2] as string;
+            if (!target || target === "0x0000000000000000000000000000000000000000") {
+                throw new Error(`Invalid target address extracted: ${target}`);
+            }
+            return target;
+        } else if (decoded.name === "fillQuoteEthToToken" ||
+                   decoded.name === "fillQuoteTokenToEth" ||
+                   decoded.name === "fillQuoteTokenToEthWithPermit") {
+            // For ETH trades, target is the 2nd parameter (index 1)
+            const target = decoded.args[1] as string;
             if (!target || target === "0x0000000000000000000000000000000000000000") {
                 throw new Error(`Invalid target address extracted: ${target}`);
             }

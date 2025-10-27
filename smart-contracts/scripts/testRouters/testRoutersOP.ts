@@ -249,9 +249,14 @@ async function testRouter(
 
     // Extract and validate target address
     const targetAddress = extractTargetFromRainbowData(trade.data);
-    const targetCode = await hre.ethers.provider.getCode(targetAddress);
-    if (targetCode === "0x") {
-      throw new Error(`Target contract ${targetAddress} does not exist`);
+
+    // Skip validation for native ETH placeholder address
+    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+    if (targetAddress.toLowerCase() !== ETH_PLACEHOLDER.toLowerCase()) {
+      const targetCode = await hre.ethers.provider.getCode(targetAddress);
+      if (targetCode === "0x") {
+        throw new Error(`Target contract ${targetAddress} does not exist`);
+      }
     }
 
     // Setup: Whitelist target and signers

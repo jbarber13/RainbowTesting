@@ -75,6 +75,20 @@ const CONFIG = {
   // Test configurations - array of trade pairs to test
   trades: [
     {
+      name: "ETH → USDC",
+      inToken: "ETH",
+      outToken: "USDC",
+      testAmount: "0.0005", // 0.0005 ETH (~$2)
+      usePermit: false, // Native ETH doesn't need permits
+    },
+    {
+      name: "USDC → ETH",
+      inToken: "USDC",
+      outToken: "ETH",
+      testAmount: "1", // 1 USDC
+      usePermit: true, // USDC supports EIP-2612 permits
+    },
+    {
       name: "USDC → WLD",
       inToken: "USDC",
       outToken: "WLD",
@@ -288,9 +302,14 @@ async function testRouter(
 
     // Extract and validate target address
     const targetAddress = extractTargetFromRainbowData(trade.data);
-    const targetCode = await hre.ethers.provider.getCode(targetAddress);
-    if (targetCode === "0x") {
-      throw new Error(`Target contract ${targetAddress} does not exist`);
+
+    // Skip validation for native ETH placeholder address
+    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+    if (targetAddress.toLowerCase() !== ETH_PLACEHOLDER.toLowerCase()) {
+      const targetCode = await hre.ethers.provider.getCode(targetAddress);
+      if (targetCode === "0x") {
+        throw new Error(`Target contract ${targetAddress} does not exist`);
+      }
     }
 
     // Setup: Whitelist target and signers
@@ -319,6 +338,24 @@ async function testRouter(
         inToken.symbol,
         inToken.decimals,
       );
+
+      // Debug: Check balance
+      const balance = await inTokenContract.balanceOf(testAddress);
+      console.log(`  User ${inToken.symbol} balance: ${formatUnits(balance, inToken.decimals)} ${inToken.symbol}`);
+      console.log(`  Required amount: ${formatUnits(inputAmount, inToken.decimals)} ${inToken.symbol}`);
+      if (balance < inputAmount) {
+        console.log(`  ⚠️ WARNING: Insufficient balance!`);
+      }
+    }
+
+    // Debug: Check native ETH balance if needed
+    if (inToken.isNative) {
+      const ethBalance = await hre.ethers.provider.getBalance(testAddress);
+      console.log(`  User ETH balance: ${formatUnits(ethBalance, 18)} ETH`);
+      console.log(`  Required amount: ${formatUnits(inputAmount, 18)} ETH`);
+      if (ethBalance < inputAmount) {
+        console.log(`  ⚠️ WARNING: Insufficient ETH balance!`);
+      }
     }
 
     // Pre-simulate transaction
