@@ -198,43 +198,24 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
 export const getRainbowExecution = async (
     coupon: Coupon,
     market: string,
-    inToken: Token,
-    outToken: Token,
-    inputAmount: string,
-    usePermit: boolean = false,
-    permitSignature?: string,
     baseUrl?: string
 ): Promise<RainbowExecutionInfo> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/execution_information`;
 
+    // Minimal request body - Rainbow transformation already happened at quote time
     const requestBody: ExecutionRequest = {
         coupon: coupon,
-        inToken: inToken,
-        outToken: outToken,
-        inputAmount: inputAmount,
         useRainbow: true
     };
 
-    if (usePermit) {
-        if (permitSignature) {
-            // @ts-ignore - permitSignature is not yet in ExecutionRequest interface
-            requestBody.permitSignature = permitSignature;
-        } else {
-            requestBody.signingRequest = {};
-        }
-    }
-
-    // Debug logging
-    console.log(`      [DEBUG] getRainbowExecution - usePermit: ${usePermit}`);
-    console.log(`      [DEBUG] Request body has permitSignature: ${!!requestBody.permitSignature}`);
-    console.log(`      [DEBUG] Request body has signingRequest: ${!!requestBody.signingRequest}`);
-
     try {
         const response = await axios.post(url, requestBody);
+        // Response is now ExecutionInformation directly (not wrapped in ExecutionInformationWithWarrant)
+        // Warrant is embedded in the trade.data calldata, not returned separately
         const executionInfo = response.data as RainbowExecutionInfo;
 
         // Debug: Log the function being called
-        const trade = executionInfo.trade || executionInfo.executionInformation?.trade;
+        const trade = executionInfo.trade;
         if (trade?.data) {
             try {
                 const rainbowInterface = RainbowRouter__factory.createInterface();
@@ -524,10 +505,13 @@ export const executeRainbowTransaction = async (
         };
         
     } catch (error: any) {
-        console.error("❌ Transaction execution failed:", error.message);
-        if (error.data) {
-            console.error("Error data:", error.data);
-        }
+        console.error("❌ Transaction execution failed");
+        console.error("Revert reason:", error.reason || error.message);
+        console.error("\n=== Tenderly Simulation Data ===");
+        console.error("Target:", to);
+        console.error("Data:", data);
+        console.error("Value:", value);
+        console.error("================================\n");
         throw error;
     }
 };

@@ -75,7 +75,7 @@ const CONFIG = {
   routers: [
     "enso",
     //"icecreamswap",
-    "odos",
+    //"odos",
     //"oneinch",
     //"paraswap",
     //"kyberswap",
@@ -85,7 +85,6 @@ const CONFIG = {
   // Test settings
   testAmount: "0.001", // 0.001 ETH
   slippage: 1000, // 10%
-  usePermit: false, // No permits needed for native ETH
   simulateOnly: true,
   delayBetweenTests: 3000, // 3 seconds
 };
@@ -188,15 +187,13 @@ async function testRouter(
   const params: canoeParams = {
     chain: CONFIG.chain,
     account: CONFIG.rainbowRouterAddress,
-    userAddress: testAddress,
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
     inTokenAmount: CONFIG.testAmount,
     slippage: CONFIG.slippage,
     useRainbow: true,
-    getCalldata: true,
-    usePermit: CONFIG.usePermit
+    getCalldata: true
   };
 
   // Get initial balances
@@ -217,34 +214,42 @@ async function testRouter(
     }
 
     // Step 2: Get Rainbow execution
+    // Rainbow transformation already happened at quote time
     console.log(`      [${router}] Starting execution request...`);
     const execStart = Date.now();
-    const executionRequest = {
-      coupon: quoteResponse.coupon,
-      useRainbow: true,
-      inToken: originalInToken,
-      outToken: originalOutToken,
-      inputAmount: inputAmount.toString()
-    };
 
     const rainbowExecution = await getRainbowExecution(
-      executionRequest.coupon,
-      router,
-      executionRequest.inToken,
-      executionRequest.outToken,
-      executionRequest.inputAmount,
-      CONFIG.usePermit,
-      undefined, // no permit signature for native ETH
+      quoteResponse.coupon,
+      router
     );
     const execEnd = Date.now();
     console.log(`      [${router}] Execution received in ${execEnd - execStart}ms`);
 
     // Get trade data
     console.log(`      [${router}] Processing trade data...`);
-    const trade =
-      rainbowExecution.trade || rainbowExecution.executionInformation?.trade;
+    const trade = rainbowExecution.trade;
     if (!trade) {
       throw new Error("Invalid Rainbow execution response - no trade data found");
+    }
+
+    // Verify transaction target is Rainbow Router (not DEX aggregator)
+    if (trade.to.toLowerCase() !== CONFIG.rainbowRouterAddress.toLowerCase()) {
+      throw new Error(
+        `Expected Rainbow Router address ${CONFIG.rainbowRouterAddress}, got ${trade.to}. ` +
+        `Backend may not have transformed to Rainbow Router correctly.`
+      );
+    }
+
+    // Verify approvals (if any) target Rainbow Router
+    if (rainbowExecution.approvals && rainbowExecution.approvals.length > 0) {
+      for (const approval of rainbowExecution.approvals) {
+        if (approval.approvee &&
+            approval.approvee.toLowerCase() !== CONFIG.rainbowRouterAddress.toLowerCase()) {
+          throw new Error(
+            `Approval targets ${approval.approvee} instead of Rainbow Router ${CONFIG.rainbowRouterAddress}`
+          );
+        }
+      }
     }
 
     // Extract and validate target address

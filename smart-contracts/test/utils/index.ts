@@ -312,9 +312,9 @@ export type PermitData = {
 }
 
 export type WarrantData = {
-  nonce: bigint,
-  validBefore: bigint,
-  validAfter: bigint,
+  nonce: string,
+  validBefore: string,
+  validAfter: string,
   verifyingSigner: string,
   signature: string
 }
