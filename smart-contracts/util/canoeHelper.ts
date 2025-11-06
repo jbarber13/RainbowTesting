@@ -332,10 +332,14 @@ export const handleERC20Approval = async (
         const receipt = await approveTx.wait();
         console.log(`✅ Approval transaction confirmed in block ${receipt!.blockNumber}`);
 
+        // Add small delay to ensure state propagation on mainnet
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         const newAllowance = await token.allowance(signerAddress, spenderAddress);
         console.log(`✅ New allowance: ${formatUnits(newAllowance, tokenDecimals)} ${tokenSymbol}`);
 
         if (newAllowance < BigInt(amount.toString())) {
+            console.error(`  ⚠️  Allowance check failed. Transaction: https://optimistic.etherscan.io/tx/${approveTx.hash}`);
             throw new Error(`Approval failed: expected ${formatUnits(amount, tokenDecimals)}, got ${formatUnits(newAllowance, tokenDecimals)}`);
         }
     } catch (error: any) {

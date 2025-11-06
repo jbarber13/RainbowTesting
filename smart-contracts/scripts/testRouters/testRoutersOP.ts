@@ -82,8 +82,29 @@ const CONFIG = {
     //"unizen"
   ],
 
+  // Test scenarios
+  testScenarios: [
+    {
+      name: "ETH → WETH",
+      inToken: "ETH",
+      outToken: "WETH",
+      amount: "0.001",
+    },
+    {
+      name: "WETH → ETH",
+      inToken: "WETH",
+      outToken: "ETH",
+      amount: "0.001",
+    },
+    {
+      name: "USDC → WETH",
+      inToken: "USDC",
+      outToken: "WETH",
+      amount: "5", // $5 USDC
+    },
+  ],
+
   // Test settings
-  testAmount: "0.001", // 0.001 ETH
   slippage: 1000, // 10%
   simulateOnly: true,
   delayBetweenTests: 3000, // 3 seconds
@@ -95,6 +116,7 @@ const CONFIG = {
 
 interface RouterTestResult {
   router: string;
+  scenario: string;
   success: boolean;
   error?: string;
   gasUsed?: string;
@@ -111,43 +133,44 @@ async function main() {
   console.log("🚀 Testing Optimism Routers\n");
   console.log(`Network: ${CONFIG.chain} (chainId: ${CONFIG.chainId})`);
   console.log(`Rainbow Router: ${CONFIG.rainbowRouterAddress}`);
-  console.log(`Test: ${CONFIG.testAmount} ETH → WETH`);
-  console.log(`Routers to test: ${CONFIG.routers.length}\n`);
+  console.log(`Routers: ${CONFIG.routers.length}, Scenarios: ${CONFIG.testScenarios.length}\n`);
 
   const results: RouterTestResult[] = [];
 
-  // Test each router
+  // Test each router with each scenario
   for (const router of CONFIG.routers) {
-    try {
-      const setup = await setupTestEnvironment();
+    for (const scenario of CONFIG.testScenarios) {
+      try {
+        const setup = await setupTestEnvironment();
 
-      // Verify the signer matches our dev wallet
-      const testAddress = await setup.testSigner.getAddress();
-      if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
-        throw new Error(
-          `Expected wallet ${CONFIG.userWalletAddress}, but got ${testAddress}`,
-        );
+        // Verify the signer matches our dev wallet
+        const testAddress = await setup.testSigner.getAddress();
+        if (testAddress.toLowerCase() !== CONFIG.userWalletAddress.toLowerCase()) {
+          throw new Error(
+            `Expected wallet ${CONFIG.userWalletAddress}, but got ${testAddress}`,
+          );
+        }
+
+        console.log(`\n📋 Testing ${router} - ${scenario.name}`);
+        const result = await testRouter(router, scenario, setup);
+        results.push(result);
+
+        if (result.success) {
+          console.log(`  ✅ ${router} - ${scenario.name}`);
+        } else {
+          console.log(`  ❌ ${router} - ${scenario.name}: ${result.error}`);
+        }
+      } catch (error: any) {
+        console.log(`  ❌ ${router} - ${scenario.name}: ${error.message}`);
+        results.push({
+          router,
+          scenario: scenario.name,
+          success: false,
+          error: error.message,
+        });
       }
 
-      const result = await testRouter(router, setup);
-      results.push(result);
-
-      if (result.success) {
-        console.log(`  ✅ ${router}`);
-      } else {
-        console.log(`  ❌ ${router}: ${result.error}`);
-      }
-    } catch (error: any) {
-      console.log(`  ❌ ${router}: ${error.message}`);
-      results.push({
-        router,
-        success: false,
-        error: error.message,
-      });
-    }
-
-    // Add delay between tests
-    if (CONFIG.routers.indexOf(router) < CONFIG.routers.length - 1) {
+      // Add delay between tests
       await new Promise((resolve) => setTimeout(resolve, CONFIG.delayBetweenTests));
     }
   }
@@ -158,14 +181,15 @@ async function main() {
 
 async function testRouter(
   router: string,
+  scenario: { name: string; inToken: string; outToken: string; amount: string },
   setup: TestSetup,
 ): Promise<RouterTestResult> {
-  const { testSigner, contractOwner, mainnet, Rainbow } = setup;
+  const { testSigner, contractOwner, mainnet, Rainbow, USDC, WETH } = setup;
   const testAddress = await testSigner.getAddress();
 
-  // Use ETH → WETH for this test
-  const inToken = CONFIG.tokens.ETH;
-  const outToken = CONFIG.tokens.WETH;
+  // Get token configs based on scenario
+  const inToken = CONFIG.tokens[scenario.inToken as keyof typeof CONFIG.tokens];
+  const outToken = CONFIG.tokens[scenario.outToken as keyof typeof CONFIG.tokens];
 
   // Create token objects for API
   const originalInToken: Token = {
@@ -183,23 +207,44 @@ async function testRouter(
   };
 
   // Set up test parameters
-  const inputAmount = parseUnits(CONFIG.testAmount, inToken.decimals);
+  const inputAmount = parseUnits(scenario.amount, inToken.decimals);
   const params: canoeParams = {
     chain: CONFIG.chain,
     account: CONFIG.rainbowRouterAddress,
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
-    inTokenAmount: CONFIG.testAmount,
+    inTokenAmount: scenario.amount,
     slippage: CONFIG.slippage,
     useRainbow: true,
     getCalldata: true
   };
 
-  // Get initial balances
-  const WETH = IERC20__factory.connect(outToken.address, testSigner);
-  const initialInTokenBalance = await hre.ethers.provider.getBalance(testAddress);
-  const initialOutTokenBalance = await WETH.balanceOf(testAddress);
+  // Get initial balances based on token types
+  let initialInTokenBalance: bigint;
+  let initialOutTokenBalance: bigint;
+
+  if (inToken.isNative) {
+    initialInTokenBalance = await hre.ethers.provider.getBalance(testAddress);
+  } else {
+    const inTokenContract = scenario.inToken === "WETH"
+      ? WETH
+      : scenario.inToken === "USDC"
+      ? USDC
+      : IERC20__factory.connect(inToken.address, testSigner);
+    initialInTokenBalance = await inTokenContract.balanceOf(testAddress);
+  }
+
+  if (outToken.isNative) {
+    initialOutTokenBalance = await hre.ethers.provider.getBalance(testAddress);
+  } else {
+    const outTokenContract = scenario.outToken === "WETH"
+      ? WETH
+      : scenario.outToken === "USDC"
+      ? USDC
+      : IERC20__factory.connect(outToken.address, testSigner);
+    initialOutTokenBalance = await outTokenContract.balanceOf(testAddress);
+  }
 
   try {
     // Step 1: Get quote
@@ -264,6 +309,25 @@ async function testRouter(
       }
     }
 
+    // Handle token approvals for ERC20 input tokens
+    if (!inToken.isNative) {
+      console.log(`      [${router}] Handling ${inToken.symbol} approval...`);
+      const tokenContract = scenario.inToken === "WETH"
+        ? WETH
+        : scenario.inToken === "USDC"
+        ? USDC
+        : IERC20__factory.connect(inToken.address, testSigner);
+
+      await handleERC20Approval(
+        testSigner,
+        tokenContract,
+        CONFIG.rainbowRouterAddress,
+        inputAmount,
+        inToken.symbol,
+        inToken.decimals
+      );
+    }
+
     // Setup: Whitelist target and signers
     console.log(`      [${router}] Whitelisting addresses...`);
     const whitelistStart = Date.now();
@@ -315,6 +379,7 @@ async function testRouter(
     if (CONFIG.simulateOnly) {
       return {
         router,
+        scenario: scenario.name,
         success: true,
         gasUsed: gasEstimate?.toString(),
         txHash: "SIMULATED",
@@ -345,6 +410,7 @@ async function testRouter(
 
       return {
         router,
+        scenario: scenario.name,
         success: true,
         gasUsed: executionResult.gasUsed,
         txHash: executionResult.txHash,
@@ -359,6 +425,7 @@ async function testRouter(
   } catch (error: any) {
     return {
       router,
+      scenario: scenario.name,
       success: false,
       error: error.message,
     };
@@ -377,13 +444,13 @@ function printTestSummary(results: RouterTestResult[]) {
   console.log(`❌ Failed: ${failed.length}/${results.length}`);
 
   if (successful.length > 0) {
-    console.log(`\n✓ Working Routers:`);
-    successful.forEach(r => console.log(`  - ${r.router}`));
+    console.log(`\n✓ Successful Tests:`);
+    successful.forEach(r => console.log(`  - ${r.router} - ${r.scenario}`));
   }
 
   if (failed.length > 0) {
-    console.log(`\n✗ Failed Routers:`);
-    failed.forEach(r => console.log(`  - ${r.router}: ${r.error}`));
+    console.log(`\n✗ Failed Tests:`);
+    failed.forEach(r => console.log(`  - ${r.router} - ${r.scenario}: ${r.error}`));
   }
 
   console.log(`\n${"=".repeat(80)}`);
