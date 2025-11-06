@@ -74,12 +74,12 @@ const CONFIG = {
   // Supported routers
   routers: [
     "enso",
-    //"icecreamswap",
-    //"odos",
-    //"oneinch",
-    //"paraswap",
-    //"kyberswap",
-    //"unizen"
+    "icecreamswap",
+    "odos",
+    "oneinch",
+    "paraswap",
+    "kyberswap",
+    "unizen"
   ],
 
   // Test scenarios
