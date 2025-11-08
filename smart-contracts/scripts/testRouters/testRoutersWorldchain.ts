@@ -40,7 +40,7 @@ const CONFIG = {
   // Supported tokens
   tokens: {
     ETH: {
-      address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // Native ETH
+      address: "0x0000000000000000000000000000000000000000", // Native ETH (zero address)
       decimals: 18,
       symbol: "ETH",
       isNative: true,
@@ -79,28 +79,24 @@ const CONFIG = {
       inToken: "ETH",
       outToken: "USDC",
       testAmount: "0.0005", // 0.0005 ETH (~$2)
-      usePermit: false, // Native ETH doesn't need permits
     },
     {
       name: "USDC → ETH",
       inToken: "USDC",
       outToken: "ETH",
       testAmount: "1", // 1 USDC
-      usePermit: true, // USDC supports EIP-2612 permits
     },
     {
       name: "USDC → WLD",
       inToken: "USDC",
       outToken: "WLD",
       testAmount: "1", // 1 USDC
-      usePermit: true, // USDC supports EIP-2612 permits
     },
     {
       name: "WLD → USDC",
       inToken: "WLD",
       outToken: "USDC",
       testAmount: "1", // 1 WLD
-      usePermit: false, // WLD does NOT support EIP-2612 permits (OptimismMintableERC20)
     },
   ],
 
@@ -223,16 +219,14 @@ async function testRouter(
   const inputAmount = parseUnits(tradeConfig.testAmount, inToken.decimals);
   const params: canoeParams = {
     chain: CONFIG.chain,
-    account: CONFIG.rainbowRouterAddress,
-    userAddress: testAddress,
+    account: CONFIG.rainbowRouterAddress, // Rainbow Router will override dstAddress when useRainbow: true
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
     inTokenAmount: tradeConfig.testAmount,
     slippage: CONFIG.slippage,
     useRainbow: true,
-    getCalldata: true,
-    usePermit: tradeConfig.usePermit
+    getCalldata: true
   };
 
   // Get token contracts for balance checking
@@ -260,56 +254,60 @@ async function testRouter(
     }
 
     // Step 2: Get Rainbow execution
-    const executionRequest = {
-      coupon: quoteResponse.coupon,
-      useRainbow: true,
-      inToken: originalInToken,
-      outToken: originalOutToken,
-      inputAmount: inputAmount.toString()
-    };
-
-    // Step 1.5: Sign permit if requested and rainbowPermitRequest exists
-    let permitSignature: string | undefined;
-    if (tradeConfig.usePermit && quoteResponse.rainbowPermitRequest) {
-      const permitRequest = quoteResponse.rainbowPermitRequest;
-      try {
-        permitSignature = await testSigner.signTypedData(
-          permitRequest.domain,
-          permitRequest.types,
-          permitRequest.message
-        );
-      } catch (error: any) {
-        throw new Error(`Permit signing failed: ${error.message}`);
-      }
-    }
-
+    // Rainbow transformation already happened at quote time
     const rainbowExecution = await getRainbowExecution(
-      executionRequest.coupon,
-      router,
-      executionRequest.inToken,
-      executionRequest.outToken,
-      executionRequest.inputAmount,
-      tradeConfig.usePermit,
-      permitSignature,
+      quoteResponse.coupon,
+      router
     );
 
     // Get trade data
-    const trade =
-      rainbowExecution.trade || rainbowExecution.executionInformation?.trade;
+    const trade = rainbowExecution.trade;
     if (!trade) {
       throw new Error("Invalid Rainbow execution response - no trade data found");
+    }
+
+    // Verify transaction target is Rainbow Router (not DEX aggregator)
+    if (trade.to.toLowerCase() !== CONFIG.rainbowRouterAddress.toLowerCase()) {
+      throw new Error(
+        `Expected Rainbow Router address ${CONFIG.rainbowRouterAddress}, got ${trade.to}. ` +
+        `Backend may not have transformed to Rainbow Router correctly.`
+      );
+    }
+
+    // Verify approvals (if any) target Rainbow Router
+    if (rainbowExecution.approvals && rainbowExecution.approvals.length > 0) {
+      for (const approval of rainbowExecution.approvals) {
+        if (approval.approvee &&
+            approval.approvee.toLowerCase() !== CONFIG.rainbowRouterAddress.toLowerCase()) {
+          throw new Error(
+            `Approval targets ${approval.approvee} instead of Rainbow Router ${CONFIG.rainbowRouterAddress}`
+          );
+        }
+      }
     }
 
     // Extract and validate target address
     const targetAddress = extractTargetFromRainbowData(trade.data);
 
-    // Skip validation for native ETH placeholder address
-    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-    if (targetAddress.toLowerCase() !== ETH_PLACEHOLDER.toLowerCase()) {
+    // Skip validation for zero address (native ETH)
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    if (targetAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
       const targetCode = await hre.ethers.provider.getCode(targetAddress);
       if (targetCode === "0x") {
         throw new Error(`Target contract ${targetAddress} does not exist`);
       }
+    }
+
+    // Handle token approvals for ERC20 input tokens (using legacy approvals, no permits)
+    if (!inToken.isNative && inTokenContract) {
+      await handleERC20Approval(
+        testSigner,
+        inTokenContract,
+        CONFIG.rainbowRouterAddress,
+        inputAmount,
+        inToken.symbol,
+        inToken.decimals,
+      );
     }
 
     // Setup: Whitelist target and signers
@@ -327,36 +325,6 @@ async function testRouter(
       Rainbow,
       BACKEND_WARRANT_SIGNER,
     );
-
-    // Handle approvals if not using permits (for ERC20 tokens only)
-    if (!tradeConfig.usePermit && !inToken.isNative && inTokenContract) {
-      await handleERC20Approval(
-        testSigner,
-        inTokenContract,
-        CONFIG.rainbowRouterAddress,
-        inputAmount,
-        inToken.symbol,
-        inToken.decimals,
-      );
-
-      // Debug: Check balance
-      const balance = await inTokenContract.balanceOf(testAddress);
-      console.log(`  User ${inToken.symbol} balance: ${formatUnits(balance, inToken.decimals)} ${inToken.symbol}`);
-      console.log(`  Required amount: ${formatUnits(inputAmount, inToken.decimals)} ${inToken.symbol}`);
-      if (balance < inputAmount) {
-        console.log(`  ⚠️ WARNING: Insufficient balance!`);
-      }
-    }
-
-    // Debug: Check native ETH balance if needed
-    if (inToken.isNative) {
-      const ethBalance = await hre.ethers.provider.getBalance(testAddress);
-      console.log(`  User ETH balance: ${formatUnits(ethBalance, 18)} ETH`);
-      console.log(`  Required amount: ${formatUnits(inputAmount, 18)} ETH`);
-      if (ethBalance < inputAmount) {
-        console.log(`  ⚠️ WARNING: Insufficient ETH balance!`);
-      }
-    }
 
     // Pre-simulate transaction
     const modifiedTrade = trade;

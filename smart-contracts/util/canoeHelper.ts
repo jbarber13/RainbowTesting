@@ -241,9 +241,9 @@ export const getRainbowExecution = async (
 
 // Contract interaction helpers
 export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: RainbowRouter, targetAddress: string) => {
-    // Skip validation for native ETH placeholder address
-    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-    if (targetAddress.toLowerCase() === ETH_PLACEHOLDER.toLowerCase()) {
+    // Skip validation for zero address (native ETH)
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    if (targetAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
         return;
     }
 

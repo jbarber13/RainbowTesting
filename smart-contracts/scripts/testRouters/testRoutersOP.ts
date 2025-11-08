@@ -52,7 +52,7 @@ const CONFIG = {
   // Supported tokens
   tokens: {
     ETH: {
-      address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // Native ETH
+      address: "0x0000000000000000000000000000000000000000", // Native ETH (zero address)
       decimals: 18,
       symbol: "ETH",
       isNative: true,
@@ -300,9 +300,9 @@ async function testRouter(
     // Extract and validate target address
     const targetAddress = extractTargetFromRainbowData(trade.data);
 
-    // Skip validation for native ETH placeholder address
-    const ETH_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-    if (targetAddress.toLowerCase() !== ETH_PLACEHOLDER.toLowerCase()) {
+    // Skip validation for zero address (native ETH)
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    if (targetAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
       const targetCode = await hre.ethers.provider.getCode(targetAddress);
       if (targetCode === "0x") {
         throw new Error(`Target contract ${targetAddress} does not exist`);
