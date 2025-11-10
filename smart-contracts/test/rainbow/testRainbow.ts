@@ -103,6 +103,29 @@ describe("Test Rainbow Specific Functions", () => {
             await expect(Rainbow.connect(nonOwner).updateSwapTargets(newTarget, true))
                 .to.be.revertedWith("ONLY_OWNER")
         })
+
+        it("Should handle multiple add/remove cycles correctly", async () => {
+            const target = newTarget
+            // Add -> Remove -> Add -> Remove
+            await Rainbow.connect(owner).updateSwapTargets(target, true)
+            expect(await Rainbow.swapTargets(target)).to.be.true
+
+            await Rainbow.connect(owner).updateSwapTargets(target, false)
+            expect(await Rainbow.swapTargets(target)).to.be.false
+
+            await Rainbow.connect(owner).updateSwapTargets(target, true)
+            expect(await Rainbow.swapTargets(target)).to.be.true
+
+            await Rainbow.connect(owner).updateSwapTargets(target, false)
+            expect(await Rainbow.swapTargets(target)).to.be.false
+        })
+
+        it("Should allow adding zero address as swap target", async () => {
+            // Edge case: zero address technically allowed for swap targets
+            // (contract will check target approval, not zero-ness)
+            await Rainbow.connect(owner).updateSwapTargets(ZeroAddress, true)
+            expect(await Rainbow.swapTargets(ZeroAddress)).to.be.true
+        })
     })
 
     describe("updateValidSigner", () => {
@@ -129,6 +152,28 @@ describe("Test Rainbow Specific Functions", () => {
         it("Should prevent non-owner from updating valid signers", async () => {
             await expect(Rainbow.connect(nonOwner).updateValidSigner(newSigner, true))
                 .to.be.revertedWith("ONLY_OWNER")
+        })
+
+        it("Should allow adding zero address as valid signer (to bypass signature check)", async () => {
+            // Zero address signer allows warrants without signature verification
+            await Rainbow.connect(owner).updateValidSigner(ZeroAddress, true)
+            expect(await Rainbow.validSigners(ZeroAddress)).to.be.true
+        })
+
+        it("Should handle multiple add/remove cycles for signers correctly", async () => {
+            const signer = newSigner
+            // Add -> Remove -> Add -> Remove
+            await Rainbow.connect(owner).updateValidSigner(signer, true)
+            expect(await Rainbow.validSigners(signer)).to.be.true
+
+            await Rainbow.connect(owner).updateValidSigner(signer, false)
+            expect(await Rainbow.validSigners(signer)).to.be.false
+
+            await Rainbow.connect(owner).updateValidSigner(signer, true)
+            expect(await Rainbow.validSigners(signer)).to.be.true
+
+            await Rainbow.connect(owner).updateValidSigner(signer, false)
+            expect(await Rainbow.validSigners(signer)).to.be.false
         })
     })
 
@@ -173,6 +218,38 @@ describe("Test Rainbow Specific Functions", () => {
             const excessAmount = currentBalance + 1n // Calculate amount just over balance
             await expect(Rainbow.connect(owner).withdrawToken(usdcAddress, recipientAddress, excessAmount))
                 .to.be.reverted // SafeERC20 reverts without specific message usually, or with "ERC20: transfer amount exceeds balance"
+        })
+
+        it("Should allow withdrawing zero tokens", async () => {
+            // Edge case: zero amount withdrawal should succeed (no-op)
+            const initialContractBalance = await USDC.balanceOf(rainbowAddress)
+            const initialRecipientBalance = await USDC.balanceOf(recipientAddress)
+
+            await expect(Rainbow.connect(owner).withdrawToken(usdcAddress, recipientAddress, 0n))
+                .to.emit(Rainbow, "TokenWithdrawn")
+                .withArgs(usdcAddress, recipientAddress, 0n)
+
+            const finalContractBalance = await USDC.balanceOf(rainbowAddress)
+            const finalRecipientBalance = await USDC.balanceOf(recipientAddress)
+
+            expect(finalContractBalance).to.equal(initialContractBalance)
+            expect(finalRecipientBalance).to.equal(initialRecipientBalance)
+        })
+
+        it("Should allow withdrawing minimum token amount (1 wei)", async () => {
+            const minAmount = 1n
+            const initialContractBalance = await USDC.balanceOf(rainbowAddress)
+            const initialRecipientBalance = await USDC.balanceOf(recipientAddress)
+
+            await expect(Rainbow.connect(owner).withdrawToken(usdcAddress, recipientAddress, minAmount))
+                .to.emit(Rainbow, "TokenWithdrawn")
+                .withArgs(usdcAddress, recipientAddress, minAmount)
+
+            const finalContractBalance = await USDC.balanceOf(rainbowAddress)
+            const finalRecipientBalance = await USDC.balanceOf(recipientAddress)
+
+            expect(finalContractBalance).to.equal(initialContractBalance - minAmount)
+            expect(finalRecipientBalance).to.equal(initialRecipientBalance + minAmount)
         })
     })
 
@@ -226,6 +303,38 @@ describe("Test Rainbow Specific Functions", () => {
             const excessAmount = currentBalance + ethers.parseEther("1") // Calculate amount clearly over balance
             await expect(Rainbow.connect(owner).withdrawEth(recipientAddress, excessAmount))
                 .to.be.reverted // Reverts due to insufficient balance (no specific message needed usually)
+        })
+
+        it("Should allow withdrawing zero ETH", async () => {
+            // Edge case: zero amount withdrawal should succeed (no-op)
+            const initialContractBalance = await ethers.provider.getBalance(rainbowAddress)
+            const initialRecipientBalance = await ethers.provider.getBalance(recipientAddress)
+
+            await expect(Rainbow.connect(owner).withdrawEth(recipientAddress, 0n))
+                .to.emit(Rainbow, "EthWithdrawn")
+                .withArgs(recipientAddress, 0n)
+
+            const finalContractBalance = await ethers.provider.getBalance(rainbowAddress)
+            const finalRecipientBalance = await ethers.provider.getBalance(recipientAddress)
+
+            expect(finalContractBalance).to.equal(initialContractBalance)
+            expect(finalRecipientBalance).to.equal(initialRecipientBalance)
+        })
+
+        it("Should allow withdrawing minimum ETH amount (1 wei)", async () => {
+            const minAmount = 1n
+            const initialContractBalance = await ethers.provider.getBalance(rainbowAddress)
+            const initialRecipientBalance = await ethers.provider.getBalance(recipientAddress)
+
+            await expect(Rainbow.connect(owner).withdrawEth(recipientAddress, minAmount))
+                .to.emit(Rainbow, "EthWithdrawn")
+                .withArgs(recipientAddress, minAmount)
+
+            const finalContractBalance = await ethers.provider.getBalance(rainbowAddress)
+            const finalRecipientBalance = await ethers.provider.getBalance(recipientAddress)
+
+            expect(finalContractBalance).to.equal(initialContractBalance - minAmount)
+            expect(finalRecipientBalance).to.equal(initialRecipientBalance + minAmount)
         })
     })
 
