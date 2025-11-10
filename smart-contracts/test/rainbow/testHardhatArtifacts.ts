@@ -32,6 +32,7 @@ describe("Hardhat Fork Artifacts EIP-712 Test", () => {
                 {
                     forking: {
                         jsonRpcUrl: process.env.OP_URL!,
+                        blockNumber: 143608382, // Block where whale has 5795.57 USDC
                     },
                 },
             ],

@@ -14,7 +14,7 @@ describe("Permit Signature", () => {
     const ownerAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
     const wethAmount = ethers.parseEther("0.0001")
     const usdcAmount = ethers.parseUnits("0.01", 6)
-    const usdcNativeWhale = "0x133FA49A01801264fC05A12EF5ef9Db6a302e93D"
+    const usdcNativeWhale = "0xBA12222222228d8Ba445958a75a0704d566BF2C8" // Balancer Vault on Optimism
 
     const name = "Rainbow Router" // EIP-712 Domain Name
     const version = "1.0" // EIP-712 Domain Version
@@ -36,6 +36,7 @@ describe("Permit Signature", () => {
                 {
                     forking: {
                         jsonRpcUrl: process.env.OP_URL!,
+                        blockNumber: 143608382, // Block where whale has 5795.57 USDC
                     },
                 },
             ],
@@ -220,8 +221,9 @@ describe("Permit Signature", () => {
             500, rainbowAddress, 0n
         )
 
-        const millisecondsSinceEpoch: number = Date.now()
-        const time: number = Math.floor(millisecondsSinceEpoch / 1000)
+        // Use block timestamp instead of Date.now() since we're on a pinned fork
+        const latestBlock = await ethers.provider.getBlock('latest')
+        const time: number = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
         const validBefore: number = time + 3600
         const validAfter: number = time - 300
         const nonce: bigint = 1n

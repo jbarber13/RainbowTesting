@@ -12,7 +12,7 @@ describe("Test Rainbow Specific Functions", () => {
 
     const name = "Rainbow Router" // EIP-712 Domain Name
     const version = "1.0" // EIP-712 Domain Version
-    const usdcNativeWhale = "0x133FA49A01801264fC05A12EF5ef9Db6a302e93D"
+    const usdcNativeWhale = "0xBA12222222228d8Ba445958a75a0704d566BF2C8" // Balancer Vault on Optimism
     let USDC: ERC20
     let WETH: IERC20
 
@@ -31,6 +31,7 @@ describe("Test Rainbow Specific Functions", () => {
                 {
                     forking: {
                         jsonRpcUrl: process.env.OP_URL!,
+                        blockNumber: 143608382, // Block where whale has 5795.57 USDC
                     },
                 },
             ],
