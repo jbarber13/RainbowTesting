@@ -52,7 +52,7 @@ export declare namespace PermitHelper {
     value: BigNumberish;
     nonce: BigNumberish;
     deadline: BigNumberish;
-    isDaiStylePermit: boolean;
+    permitStyle: BigNumberish;
     v: BigNumberish;
     r: BytesLike;
     s: BytesLike;
@@ -62,7 +62,7 @@ export declare namespace PermitHelper {
     value: bigint,
     nonce: bigint,
     deadline: bigint,
-    isDaiStylePermit: boolean,
+    permitStyle: bigint,
     v: bigint,
     r: string,
     s: string
@@ -70,7 +70,7 @@ export declare namespace PermitHelper {
     value: bigint;
     nonce: bigint;
     deadline: bigint;
-    isDaiStylePermit: boolean;
+    permitStyle: bigint;
     v: bigint;
     r: string;
     s: string;

@@ -299,4 +299,97 @@ describe("Permit Signature", () => {
         expect(signerUsdcBalanceAfter).to.equal(signerUsdcBalanceBefore - usdcAmount, "Signer USDC balance did not decrease correctly")
         expect(recipientWethBalanceAfter).to.be.gt(recipientWethBalanceBefore, "Recipient WETH balance did not increase")
     })
+
+    it("Test Permit2 signature transfer (requires Permit2 deployed at 0x000000000022D473030F116dDEE9F6B43aC78BA3)", async () => {
+        const feeAmount = 0n
+        const sellTokenAddress = await USDC.getAddress()
+        const buyTokenAddress = await WETH.getAddress()
+        const rainbowAddress = await Rainbow.getAddress()
+        const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+
+        const swapCallData = await generateUniTxData(
+            sellTokenAddress, buyTokenAddress, usdcAmount, routerAddr,
+            500, rainbowAddress, 0n
+        )
+
+        // Use block timestamp instead of Date.now() since we're on a pinned fork
+        const latestBlock = await ethers.provider.getBlock('latest')
+        const time: number = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
+        const validBefore: number = time + 3600
+        const validAfter: number = time - 300
+        const nonce: bigint = 1n
+        const verifyingSignerAddress: string = await signer.getAddress()
+
+        const swapCallDataHash = ethers.keccak256(swapCallData)
+
+        const dataHash = ethers.keccak256(
+            ethers.AbiCoder.defaultAbiCoder().encode(
+                ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+                [sellTokenAddress, buyTokenAddress, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
+            )
+        )
+        const nonceBI = BigInt(nonce)
+        const validBeforeBI = BigInt(validBefore)
+        const validAfterBI = BigInt(validAfter)
+        const packedValueBI = nonceBI | (validBeforeBI << 160n) | (validAfterBI << 208n)
+
+        const domain = {
+            name: name,
+            version: version,
+            chainId: (await ethers.provider.getNetwork()).chainId,
+            verifyingContract: rainbowAddress
+        }
+        const types = {
+            CanoeWarrant: [
+                { name: 'packedValidationData', type: 'uint256' },
+                { name: 'dataHash', type: 'bytes32' }
+            ]
+        }
+        const value = {
+            packedValidationData: packedValueBI,
+            dataHash: dataHash
+        }
+
+        const signature = await signer.signTypedData(domain, types, value)
+
+        const warrant = {
+            nonce: nonce,
+            validBefore: validBefore,
+            validAfter: validAfter,
+            verifyingSigner: verifyingSignerAddress,
+            signature: signature
+        }
+
+        const network = await ethers.provider.getNetwork()
+        // Generate Permit2 signature (permitStyle = 2)
+        const permitData = await generatePermitSignature(
+            signer, network.chainId, sellTokenAddress, usdcAmount, rainbowAddress, 2
+        )
+
+        await stealMoney(usdcNativeWhale, await signer.getAddress(), sellTokenAddress, usdcAmount)
+
+        // CRITICAL: Approve Permit2 to spend USDC (prerequisite for permitTransferFrom)
+        await USDC.connect(signer).approve(PERMIT2_ADDRESS, ethers.MaxUint256)
+
+        const signerUsdcBalanceBefore = await USDC.balanceOf(await signer.getAddress())
+        const recipientWethBalanceBefore = await WETH.balanceOf(rainbowAddress)
+
+        let tx = await Rainbow.connect(signer).fillQuoteTokenToTokenWithPermit(
+            sellTokenAddress,
+            buyTokenAddress,
+            routerAddr,
+            swapCallData,
+            usdcAmount,
+            feeAmount,
+            permitData,
+            warrant
+        )
+        const receipt = await tx.wait()
+
+        const signerUsdcBalanceAfter = await USDC.balanceOf(await signer.getAddress())
+        const recipientWethBalanceAfter = await WETH.balanceOf(await signer.getAddress())
+
+        expect(signerUsdcBalanceAfter).to.equal(signerUsdcBalanceBefore - usdcAmount, "Signer USDC balance did not decrease correctly")
+        expect(recipientWethBalanceAfter).to.be.gt(recipientWethBalanceBefore, "Recipient WETH balance did not increase")
+    })
 })

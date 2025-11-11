@@ -235,7 +235,7 @@ export async function createWrongSignerWarrant(
 }
 
 /**
- * Create a dummy ERC-2612 permit
+ * Create a dummy permit (DAI, EIP-2612, or Permit2)
  */
 export async function createDummyPermit(
     signer: Signer,
@@ -243,12 +243,12 @@ export async function createDummyPermit(
     spenderAddress: string,
     amount: bigint,
     tokenNonce: bigint,
-    isDaiStyle: boolean = false
+    permitStyle: 0 | 1 | 2 = 1  // 0 = DAI, 1 = EIP-2612 (default), 2 = PERMIT_2
 ): Promise<{
     value: bigint;
     nonce: bigint;
     deadline: bigint;
-    isDaiStylePermit: boolean;
+    permitStyle: 0 | 1 | 2;
     v: number;
     r: string;
     s: string;
@@ -257,20 +257,72 @@ export async function createDummyPermit(
     const blockTimestamp = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000);
     const deadline = BigInt(blockTimestamp + 3600); // 1 hour from now
 
+    // Handle Permit2 separately
+    if (permitStyle === 2) {
+        const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+
+        // Generate a unique nonce (Permit2 SignatureTransfer uses bitmap, not sequential nonces)
+        // Each nonce bit can only be used once. Common practice: use timestamp or random value
+        const nonce = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+
+        const domain = {
+            name: 'Permit2',
+            chainId: (await ethers.provider.getNetwork()).chainId,
+            verifyingContract: PERMIT2_ADDRESS,
+        };
+
+        const types = {
+            PermitTransferFrom: [
+                { name: 'permitted', type: 'TokenPermissions' },
+                { name: 'spender', type: 'address' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'deadline', type: 'uint256' }
+            ],
+            TokenPermissions: [
+                { name: 'token', type: 'address' },
+                { name: 'amount', type: 'uint256' }
+            ]
+        };
+
+        const value = {
+            permitted: {
+                token: tokenAddress,
+                amount: amount
+            },
+            spender: spenderAddress,
+            nonce: nonce,
+            deadline: deadline
+        };
+
+        const signature = await signer.signTypedData(domain, types, value);
+        const sig = ethers.Signature.from(signature);
+
+        return {
+            value: amount,
+            nonce: nonce,
+            deadline,
+            permitStyle: 2,
+            v: sig.v,
+            r: sig.r,
+            s: sig.s
+        };
+    }
+
+    // Handle DAI and EIP-2612 permits
     const token = await ethers.getContractAt("IERC20Metadata", tokenAddress);
     const name = await token.name();
     const chainId = (await ethers.provider.getNetwork()).chainId;
 
     const domain = {
         name,
-        version: "1", // Most ERC20 tokens use "1"
+        version: permitStyle === 0 ? "1" : "2", // DAI uses "1", EIP-2612 uses "2"
         chainId,
         verifyingContract: tokenAddress
     };
 
     let types, value;
 
-    if (isDaiStyle) {
+    if (permitStyle === 0) {
         // DAI-style permit (holder, spender)
         types = {
             Permit: [
@@ -289,7 +341,7 @@ export async function createDummyPermit(
             allowed: true
         };
     } else {
-        // ERC-2612 standard permit (owner, spender)
+        // EIP-2612 standard permit (owner, spender)
         types = {
             Permit: [
                 { name: "owner", type: "address" },
@@ -315,7 +367,7 @@ export async function createDummyPermit(
         value: amount,
         nonce: tokenNonce,
         deadline,
-        isDaiStylePermit: isDaiStyle,
+        permitStyle: permitStyle,
         v: sig.v,
         r: sig.r,
         s: sig.s

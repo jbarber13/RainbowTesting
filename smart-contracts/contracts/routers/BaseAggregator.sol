@@ -166,7 +166,8 @@ contract BaseAggregator is EIP712 {
             swapCallData,
             sellAmount,
             feeAmount,
-            warrant
+            warrant,
+            false  // Tokens not yet transferred, must pull from user
         );
     }
 
@@ -196,6 +197,8 @@ contract BaseAggregator is EIP712 {
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         // 1 - Apply permit
+        // NOTE: For Permit2, this transfers tokens directly to address(this)
+        // NOTE: For DAI/EIP-2612, this only grants allowance
         PermitHelper.permit(
             permitData,
             sellTokenAddress,
@@ -204,6 +207,8 @@ contract BaseAggregator is EIP712 {
         );
 
         //2 - Call fillQuoteTokenToToken
+        // Skip transferFrom if Permit2 (tokens already transferred)
+        bool skipTransferFrom = (permitData.permitStyle == PermitHelper.PermitStyle.PERMIT_2);
         _fillQuoteTokenToToken(
             sellTokenAddress,
             buyTokenAddress,
@@ -211,7 +216,8 @@ contract BaseAggregator is EIP712 {
             swapCallData,
             sellAmount,
             feeAmount,
-            warrant
+            warrant,
+            skipTransferFrom
         );
     }
 
@@ -241,7 +247,8 @@ contract BaseAggregator is EIP712 {
             swapCallData,
             sellAmount,
             feePercentageBasisPoints,
-            warrant
+            warrant,
+            false  // Tokens not yet transferred, must pull from user
         );
     }
 
@@ -269,6 +276,8 @@ contract BaseAggregator is EIP712 {
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         // 1 - Apply permit
+        // NOTE: For Permit2, this transfers tokens directly to address(this)
+        // NOTE: For DAI/EIP-2612, this only grants allowance
         PermitHelper.permit(
             permitData,
             sellTokenAddress,
@@ -277,26 +286,31 @@ contract BaseAggregator is EIP712 {
         );
 
         // 2 - call fillQuoteTokenToEth
+        // Skip transferFrom if Permit2 (tokens already transferred)
+        bool skipTransferFrom = (permitData.permitStyle == PermitHelper.PermitStyle.PERMIT_2);
         _fillQuoteTokenToEth(
             sellTokenAddress,
             target,
             swapCallData,
             sellAmount,
             feePercentageBasisPoints,
-            warrant
+            warrant,
+            skipTransferFrom
         );
     }
 
     /** INTERNAL **/
 
     /// @dev internal method that executes ERC20 to ETH token swaps with the ability to take a fee from the output
+    /// @param skipTransferFrom if true, assumes tokens are already in contract (e.g., from Permit2's permitTransferFrom)
     function _fillQuoteTokenToEth(
         address sellTokenAddress,
         address payable target,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feePercentageBasisPoints,
-        CanoeHelper.Warrant calldata warrant
+        CanoeHelper.Warrant calldata warrant,
+        bool skipTransferFrom
     ) internal {
         // 0 - verify the canoe warrant
         CanoeHelper.verifyWarrant(
@@ -317,14 +331,16 @@ contract BaseAggregator is EIP712 {
         uint256 initialEthAmount = address(this).balance - msg.value;
 
         // 2 - Move the tokens to this contract
-        // NOTE: This implicitly assumes that the the necessary approvals have been granted
-        // from msg.sender to the BaseAggregator
-        SafeERC20.safeTransferFrom(
-            IERC20(sellTokenAddress),
-            msg.sender,
-            address(this),
-            sellAmount
-        );
+        // NOTE: For Permit2, tokens are already transferred during permit() call
+        // NOTE: For DAI/EIP-2612, tokens must be pulled after approval is granted
+        if (!skipTransferFrom) {
+            SafeERC20.safeTransferFrom(
+                IERC20(sellTokenAddress),
+                msg.sender,
+                address(this),
+                sellAmount
+            );
+        }
 
         // 3 - Approve the aggregator's contract to swap the tokens
         SafeERC20.safeIncreaseAllowance(
@@ -373,6 +389,7 @@ contract BaseAggregator is EIP712 {
     }
 
     /// @dev internal method that executes ERC20 to ERC20 token swaps with the ability to take a fee from the input
+    /// @param skipTransferFrom if true, assumes tokens are already in contract (e.g., from Permit2's permitTransferFrom)
     function _fillQuoteTokenToToken(
         address sellTokenAddress,
         address buyTokenAddress,
@@ -380,7 +397,8 @@ contract BaseAggregator is EIP712 {
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feeAmount,
-        CanoeHelper.Warrant calldata warrant
+        CanoeHelper.Warrant calldata warrant,
+        bool skipTransferFrom
     ) internal {
         CanoeHelper.verifyWarrant(
             _domainSeparatorV4(),
@@ -403,14 +421,16 @@ contract BaseAggregator is EIP712 {
         );
 
         // 2 - Move the tokens to this contract (which includes our fees)
-        // NOTE: This implicitly assumes that the the necessary approvals have been granted
-        // from msg.sender to the BaseAggregator
-        SafeERC20.safeTransferFrom(
-            IERC20(sellTokenAddress),
-            msg.sender,
-            address(this),
-            sellAmount
-        );
+        // NOTE: For Permit2, tokens are already transferred during permit() call
+        // NOTE: For DAI/EIP-2612, tokens must be pulled after approval is granted
+        if (!skipTransferFrom) {
+            SafeERC20.safeTransferFrom(
+                IERC20(sellTokenAddress),
+                msg.sender,
+                address(this),
+                sellAmount
+            );
+        }
 
         // 3 - Approve the aggregator's contract to swap the tokens if needed
         SafeERC20.safeIncreaseAllowance(

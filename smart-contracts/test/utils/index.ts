@@ -305,7 +305,7 @@ export type PermitData = {
   value: bigint,
   nonce: bigint,
   deadline: bigint,
-  isDaiStylePermit: boolean,
+  permitStyle: 0 | 1 | 2,  // 0 = DAI, 1 = EIP-2612, 2 = PERMIT_2
   v: bigint,
   r: string,
   s: string
@@ -325,7 +325,7 @@ export type WarrantData = {
  * @param spenderAddress Address of the spender being approved.
  * @param value The amount to approve (for EIP-2612). Use ethers.MaxUint256 for max approval.
  * @param deadline Unix timestamp deadline for the permit.
- * @returns Promise<{ r: string; s: string; v: number; deadline: bigint; nonce: bigint; isDaiStylePermit: boolean }> The signature components and permit details.
+ * @returns Promise<{ r: string; s: string; v: number; deadline: bigint; nonce: bigint; permitStyle: 0 | 1 | 2 }> The signature components and permit details.
  */
 async function signPermit(
   signer: Signer, // Accept the signer directly
@@ -347,7 +347,8 @@ async function signPermit(
     "function name() view returns (string)"
   ], provider) as unknown as IERC20Metadata;
 
-  const isDaiStylePermit = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
+  const isDaiStyle = resolvedTokenAddress.toLowerCase() === DAI_ADDRESS.toLowerCase();
+  const permitStyle: 0 | 1 | 2 = isDaiStyle ? 0 : 1; // 0 = DAI, 1 = EIP-2612 (default for this function)
 
   const [tokenName, version, nonce] = await Promise.all([
     tokenContract.name(),
@@ -366,8 +367,8 @@ async function signPermit(
 
   let message: Record<string, any>;
   let types: Record<string, ethers.TypedDataField[]>;
-  if (isDaiStylePermit) {
-    
+  if (isDaiStyle) {
+
     types = PERMIT_ALLOWED_TYPE;
     message = {
       holder: ownerAddress,
@@ -400,7 +401,7 @@ async function signPermit(
     v: BigInt(sig.v), // v is already normalized by ethers
     deadline: BigInt(deadline), // Return deadline as BigInt
     nonce: BigInt(nonce), // Return nonce as BigInt
-    isDaiStylePermit,
+    permitStyle,
     // value: BigInt(value), // Optionally return value if needed elsewhere
   } as PermitData;
 }

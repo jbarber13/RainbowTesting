@@ -162,7 +162,7 @@ export interface PermitOutput {
     value: bigint;
     nonce: bigint;
     deadline: bigint;
-    isDaiStylePermit: boolean;
+    permitStyle: 0 | 1 | 2;  // 0 = DAI, 1 = EIP-2612, 2 = PERMIT_2
     v: number;
     r: string;
     s: string;
@@ -174,6 +174,7 @@ export const generatePermitSignature = async (
     tokenAddress: string, // Address of the ERC-20 token
     amount: bigint,      // The 'value' for the permit
     spender: string,     // Address granted allowance
+    permitStyle: 0 | 1 | 2 = 1, // 0 = DAI, 1 = EIP-2612 (default), 2 = PERMIT_2
     // Nonce will be fetched from the token contract
     expiration?: number, // Optional: custom expiration timestamp (in seconds)
 ): Promise<PermitOutput> => { // Return the desired Permit struct data
@@ -187,91 +188,139 @@ export const generatePermitSignature = async (
         deadline = expiration;
     }
 
-    // --- End Impersonation Block ---
+    // Handle Permit2 separately (different signature structure)
+    if (permitStyle === 2) {
+        // Permit2 SignatureTransfer
+        const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 
-    // Connect to the ERC20 token contract
-    // Use the factory if it includes 'nonces' and 'name', otherwise use the minimal ABI
-    // const tokenContract = ERC20__factory.connect(tokenAddress, signer); // Use this if factory is complete
-    const tokenContract = ERC20__factory.connect(tokenAddress, signer)
-    let nonce: bigint = 0n; // Initialize nonce to 0n (BigInt zero) as the default
+        // Generate a unique nonce (Permit2 SignatureTransfer uses bitmap, not sequential nonces)
+        // Each nonce bit can only be used once. Common practice: use timestamp or random value
+        const nonce = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+
+        // Define Permit2 domain
+        const domain: TypedDataDomain = {
+            name: 'Permit2',
+            chainId: chainId,
+            verifyingContract: PERMIT2_ADDRESS,
+        };
+
+        // Define Permit2 SignatureTransfer types
+        const types = {
+            PermitTransferFrom: [
+                { name: 'permitted', type: 'TokenPermissions' },
+                { name: 'spender', type: 'address' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'deadline', type: 'uint256' }
+            ],
+            TokenPermissions: [
+                { name: 'token', type: 'address' },
+                { name: 'amount', type: 'uint256' }
+            ]
+        };
+
+        // Define values
+        const values = {
+            permitted: {
+                token: tokenAddress,
+                amount: amount.toString()
+            },
+            spender: spender,
+            nonce: nonce.toString(),
+            deadline: deadline.toString()
+        };
+
+        // Sign the typed data
+        const signature = await signer.signTypedData(domain, types, values);
+        const { v, r, s } = ethers.Signature.from(signature);
+
+        return {
+            value: amount,
+            nonce: nonce,
+            deadline: BigInt(deadline),
+            permitStyle: 2,
+            v, r, s
+        };
+    }
+
+    // Handle DAI and EIP-2612 permits (both use token-based nonces)
+    const tokenContract = ERC20__factory.connect(tokenAddress, signer);
+    let nonce: bigint = 0n;
 
     try {
-        // Attempt to fetch the nonce from the contract
-        const contractNonce = await tokenContract.nonces(ownerAddress);
-        // If the call succeeds, update the nonce variable
-        nonce = contractNonce;
-        //console.log(`Successfully fetched nonce: ${nonce}`);
-
+        nonce = await tokenContract.nonces(ownerAddress);
     } catch (error: any) {
-        // Check if the error indicates the function likely doesn't exist
-        // Ethers errors often have a 'code' property. CALL_EXCEPTION is common for non-existent functions/reverts.
-        // Or we can be less specific and catch any error during the call.F
         console.warn(`WARN: Could not fetch nonce for ${tokenAddress}. This token might not support EIP-2612 (permit). Defaulting nonce to 0.`);
-        // Optional: Log the specific error for more detailed debugging if needed
-        // console.debug("Nonce fetching error details:", error.code || error);
-
-        // Nonce remains the default value of 0n set before the try block
     }
 
     // Fetch the token name for the EIP-712 domain
-    // Add error handling in case the token doesn't have a name() function
-    let tokenName = "Unknown Token"; // Default name
+    let tokenName = "Unknown Token";
     try {
         tokenName = await tokenContract.name();
     } catch (e) {
         console.warn(`Could not fetch name for token ${tokenAddress}. Using default.`);
-        // Some tokens might not implement name(), or use bytes32. Handle accordingly.
-        // You might need a more robust way to get the name required for the domain.
     }
 
-
-    // Define the EIP-712 domain separator based on EIP-2612
+    // Define the EIP-712 domain separator
     const domain: TypedDataDomain = {
         name: tokenName,
-        version: '2', // Standard version for EIP-2612 permits
+        version: permitStyle === 0 ? '1' : '2', // DAI uses version '1', EIP-2612 uses '2'
         chainId: chainId,
-        verifyingContract: tokenAddress, // Address of the ERC20 token itself
+        verifyingContract: tokenAddress,
     };
 
-    // Define the EIP-712 types for the Permit message
-    const types = {
-        Permit: [
-            { name: "owner", type: "address" },
-            { name: "spender", type: "address" },
-            { name: "value", type: "uint256" },
-            { name: "nonce", type: "uint256" },
-            { name: "deadline", type: "uint256" },
-        ],
-    };
+    // Define the EIP-712 types (DAI vs EIP-2612)
+    let types: any;
+    let values: any;
 
-    // Define the values for the Permit message
-    const values = {
-        owner: ownerAddress,
-        spender: spender,
-        value: amount.toString(), // Use string representation for signTypedData
-        nonce: nonce.toString(),  // Use string representation for signTypedData
-        deadline: deadline.toString(), // Use string representation for signTypedData
-    };
+    if (permitStyle === 0) {
+        // DAI-style permit
+        types = {
+            Permit: [
+                { name: "holder", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "nonce", type: "uint256" },
+                { name: "expiry", type: "uint256" },
+                { name: "allowed", type: "bool" }
+            ]
+        };
+        values = {
+            holder: ownerAddress,
+            spender: spender,
+            nonce: nonce.toString(),
+            expiry: deadline.toString(),
+            allowed: true
+        };
+    } else {
+        // EIP-2612 permit
+        types = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" },
+            ],
+        };
+        values = {
+            owner: ownerAddress,
+            spender: spender,
+            value: amount.toString(),
+            nonce: nonce.toString(),
+            deadline: deadline.toString(),
+        };
+    }
 
     // Sign the typed data
     const signature = await signer.signTypedData(domain, types, values);
-    // ^ Or use connectedSigner.signTypedData if you used that instance
-
-    // Split the signature into v, r, s
     const { v, r, s } = ethers.Signature.from(signature);
 
-    // Construct the final Permit struct data
-    const permitData: PermitOutput = {
-        value: amount,          // Keep as bigint
-        nonce: nonce,           // Keep as bigint (fetched from contract)
-        deadline: BigInt(deadline), // Convert deadline timestamp to bigint
-        isDaiStylePermit: false, // Hardcoded as requested
-        v: v,
-        r: r,
-        s: s,
+    return {
+        value: amount,
+        nonce: nonce,
+        deadline: BigInt(deadline),
+        permitStyle: permitStyle,
+        v, r, s
     };
-
-    return permitData;
 };
 
 export const stealMoney = async (
