@@ -496,6 +496,8 @@ The Rainbow Router is designed to work with a backend routing service that queri
 - icecreamswap
 - enso
 
+**Note:** Some aggregators may use transfer proxy patterns (see [Limitations](#current-implementation-transfer-proxy-pattern-not-supported) for technical details). Compatibility should be verified through testing.
+
 ### Backend Responsibilities
 
 1. **Query Aggregators**: Get best swap routes from multiple aggregators
@@ -690,6 +692,104 @@ This address signs all warrants and must be whitelisted in `validSigners`.
 
 ## Limitations
 
+### Current Implementation: Transfer Proxy Pattern Limitation
+
+⚠️ **POTENTIAL LIMITATION**: Rainbow Router's current implementation may not support some DEX aggregators that use a **transfer proxy pattern** (dual-contract architecture) where the approval target differs from the swap execution target.
+
+#### What is the Transfer Proxy Pattern?
+
+Some DEX aggregators separate their architecture into two contracts:
+- **Router Contract**: Receives swap calldata and executes the swap logic
+- **Approval Target Contract**: Separate contract that needs ERC20 token approval
+
+**Example: OKX DEX Aggregator on Optimism (used in test demonstration)**
+- Router (swap target): `0xC44C6550a3B13116F6fD593e1ec963d5aE78C4C8`
+- Approval Target: `0x68D6B739D2020067D1e2F713b999dA97E4d54812`
+
+**Note:** This is used as a test case example only. Specific aggregator compatibility should be verified through testing rather than assumed.
+
+#### Current Implementation Behavior
+
+The current implementation in `BaseAggregator.sol` (lines 346-350) approves tokens to the `target` parameter:
+
+```solidity
+SafeERC20.safeIncreaseAllowance(
+    IERC20(sellTokenAddress),
+    target,  // Approves to the swap target
+    sellAmount
+);
+
+// Then calls the router
+(bool success, bytes memory res) = target.call{value: msg.value}(swapCallData);
+```
+
+**If an aggregator uses separate approval and swap targets:**
+1. Rainbow Router approves tokens to swap target
+2. Rainbow Router calls swap target with calldata
+3. Swap target tries to pull tokens via separate approval target
+4. **Transaction may revert** - Approval target doesn't have allowance
+
+**Expected behavior for dual-contract architectures:** Approve to Approval Target, call Router for execution.
+
+#### Test Demonstrating Pattern
+
+See `test/rainbow/testTransferProxy.ts` for a test case that demonstrates this pattern using OKX as an example:
+
+```typescript
+// Test expects revert when approval target differs from swap target
+await expect(
+    Rainbow.connect(signer).fillQuoteTokenToToken(
+        USDC_ADDRESS,
+        WETH_ADDRESS,
+        OKX_ROUTER,          // Router receives call
+        dummySwapCalldata,
+        usdcAmount,
+        0n,
+        warrant
+    )
+).to.be.reverted  // Demonstrates the approval mismatch scenario
+```
+
+Run the test:
+```bash
+npx hardhat test test/rainbow/testTransferProxy.ts
+```
+
+#### Potential Future Enhancement
+
+To support aggregators with separate approval and swap targets, Rainbow Router could be enhanced with:
+
+1. **Add `approvalTarget` parameter** to fillQuote functions (optional, defaults to `target`)
+2. **Update approval logic** to approve to `approvalTarget` instead of `target`
+3. **Whitelist both addresses** - Router and Approval Target must both be whitelisted
+4. **Backend integration** - Backend must provide correct approval target in responses
+
+**Example future implementation:**
+```solidity
+function fillQuoteTokenToToken(
+    address sellTokenAddress,
+    address buyTokenAddress,
+    address payable target,          // Router contract
+    address approvalTarget,          // NEW: Approval contract (defaults to target if not specified)
+    bytes calldata swapCallData,
+    uint256 sellAmount,
+    uint256 feeAmount,
+    CanoeHelper.Warrant calldata warrant
+) external payable {
+    // Approve to approvalTarget (not target)
+    SafeERC20.safeIncreaseAllowance(IERC20(sellTokenAddress), approvalTarget, sellAmount);
+
+    // Call target for execution
+    (bool success, bytes memory res) = target.call{value: msg.value}(swapCallData);
+
+    // Verify allowance consumed from approvalTarget
+    uint256 allowance = IERC20(sellTokenAddress).allowance(address(this), approvalTarget);
+    require(allowance == 0, "ALLOWANCE_NOT_ZERO");
+}
+```
+
+---
+
 ### What Rainbow Router CANNOT Do
 
 1. **Execute swaps without valid warrants** (unless `address(0)` signer enabled)
@@ -770,6 +870,7 @@ The repository includes comprehensive test suites:
 - `test/rainbow/rainbow.test.ts` - Core functionality tests
 - `test/rainbow/testSignature.ts` - Permit and warrant signature tests
 - `test/rainbow/warrantsAccessControl.test.ts` - Access control tests
+- `test/rainbow/testTransferProxy.ts` - Transfer proxy pattern demonstration
 
 **Integration Tests:**
 - `scripts/testRouters/testRoutersOP.ts` - Optimism aggregators
@@ -799,8 +900,9 @@ REPORT_GAS=true npm test
 - ✅ Reentrancy protection
 - ✅ Balance and allowance verification
 - ✅ Real aggregator integrations (1inch, Odos, Enso, etc.)
+- ✅ Transfer proxy pattern (dual-contract architecture demonstration)
 
-**Total: 76 passing tests**
+**Total: 80 passing tests** (76 core tests + 4 transfer proxy tests)
 
 ---
 
