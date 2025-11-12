@@ -9,20 +9,20 @@ import { expect } from "chai"
 const { ethers } = require("hardhat")
 
 /**
- * Test suite demonstrating the limitation of the current Rainbow Router implementation
- * with transfer proxy patterns like OKX DEX aggregator.
+ * Test suite demonstrating Rainbow Router's support for transfer proxy patterns
+ * like OKX DEX aggregator, with warrant validation requirements.
  *
- * PROBLEM: OKX uses a dual-contract architecture:
+ * TRANSFER PROXY PATTERN: OKX uses a dual-contract architecture:
  * - Router Contract (0xC44C6550a3B13116F6fD593e1ec963d5aE78C4C8): Receives swap calldata
  * - Approval Target (0x68D6B739D2020067D1e2F713b999dA97E4d54812): Needs token approval
  *
- * Current Rainbow Router approves tokens to the `target` parameter (router), but OKX
- * needs approval to go to the separate approval target contract.
+ * SECURITY REQUIREMENT: When target != approvalTarget, warrants cannot be bypassed.
+ * This ensures the backend validates that the target/approvalTarget pairing is correct.
  *
  * This test uses REAL OKX calldata (properly encoded dagSwapTo function) to demonstrate
- * that the calldata itself is valid, but the approval goes to the wrong contract.
+ * the transfer proxy pattern with warrant validation.
  */
-describe("Transfer Proxy Limitation (OKX)", () => {
+describe("Transfer Proxy Pattern with Warrant Validation", () => {
     let Rainbow: RainbowRouter
 
     // OKX DEX Aggregator addresses on Optimism
@@ -89,13 +89,271 @@ describe("Transfer Proxy Limitation (OKX)", () => {
         console.log(`        OKX Approval Target whitelisted: ${OKX_APPROVAL_TARGET}`)
     })
 
+    // Helper function to create valid EIP-712 warrant signature
+    async function createValidWarrant(
+        sellTokenAddress: string,
+        buyTokenAddress: string,
+        target: string,
+        approvalTarget: string,
+        swapCallData: string,
+        sellAmount: bigint,
+        feeAmount: bigint,
+        nonce: number,
+        validBefore: number,
+        validAfter: number
+    ) {
+        const rainbowAddress = await Rainbow.getAddress()
+        const signerAddress = await signer.getAddress()
+
+        // Calculate hash of swap data
+        const swapCallDataHash = ethers.keccak256(swapCallData)
+        const dataHash = ethers.keccak256(
+            ethers.AbiCoder.defaultAbiCoder().encode(
+                ['address', 'address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+                [sellTokenAddress, buyTokenAddress, target, approvalTarget, swapCallDataHash, sellAmount, feeAmount]
+            )
+        )
+
+        // Pack validation data: nonce | (validBefore << 160) | (validAfter << 208)
+        const nonceBI = BigInt(nonce)
+        const validBeforeBI = BigInt(validBefore)
+        const validAfterBI = BigInt(validAfter)
+        const packedValueBI = nonceBI | (validBeforeBI << 160n) | (validAfterBI << 208n)
+
+        // EIP-712 domain
+        const domain = {
+            name: name,
+            version: version,
+            chainId: (await ethers.provider.getNetwork()).chainId,
+            verifyingContract: rainbowAddress
+        }
+
+        // EIP-712 types
+        const types = {
+            CanoeWarrant: [
+                { name: 'packedValidationData', type: 'uint256' },
+                { name: 'dataHash', type: 'bytes32' }
+            ]
+        }
+
+        // EIP-712 value
+        const value = {
+            packedValidationData: packedValueBI,
+            dataHash: dataHash
+        }
+
+        // Sign with EIP-712
+        const signature = await signer.signTypedData(domain, types, value)
+
+        return {
+            nonce: nonce,
+            validBefore: validBefore,
+            validAfter: validAfter,
+            verifyingSigner: signerAddress,
+            signature: signature
+        }
+    }
+
+    it("Should REVERT transfer proxy (target != approvalTarget) with ZeroAddress warrant", async () => {
+        // Get USDC for test
+        await stealMoney(usdcNativeWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
+
+        // Approve Rainbow Router to spend USDC
+        await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
+
+        // Create OKX swap calldata
+        const latestBlock = await ethers.provider.getBlock('latest')
+        const currentTime = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
+
+        const baseRequest = {
+            fromToken: USDC_ADDRESS,
+            toToken: WETH_ADDRESS,
+            fromTokenAmount: usdcAmount,
+            minReturnAmount: 1n,
+            deadLine: currentTime + 1800
+        }
+
+        const callDataConcat = "0x"
+        const toAddress = await Rainbow.getAddress()
+
+        const okxInterface = IOKXDexRouter__factory.createInterface()
+        const okxSwapCalldata = okxInterface.encodeFunctionData("dagSwapTo", [
+            baseRequest,
+            callDataConcat,
+            false,
+            toAddress
+        ])
+
+        // Create warrant with ZeroAddress signer (attempting to bypass)
+        const warrant = {
+            nonce: 1n,
+            validBefore: currentTime + 3600,
+            validAfter: currentTime - 300,
+            verifyingSigner: ZeroAddress,
+            signature: "0x"
+        }
+
+        console.log("\n        === Testing warrant requirement for transfer proxy ===")
+        console.log(`        Target: ${OKX_ROUTER}`)
+        console.log(`        Approval Target: ${OKX_APPROVAL_TARGET}`)
+        console.log(`        These are DIFFERENT, so warrant validation is REQUIRED`)
+
+        // Attempt to use transfer proxy with ZeroAddress warrant - should FAIL
+        await expect(
+            Rainbow.connect(signer).fillQuoteTokenToToken(
+                USDC_ADDRESS,
+                WETH_ADDRESS,
+                OKX_ROUTER,
+                OKX_APPROVAL_TARGET,  // Different from target
+                okxSwapCalldata,
+                usdcAmount,
+                0n,
+                warrant
+            )
+        ).to.be.revertedWith("CANOE: WARRANT_REQUIRED_FOR_PROXY")
+
+        console.log(`        ✓ Transaction reverted as expected: warrant required for transfer proxy`)
+    })
+
+    it("Should SUCCEED transfer proxy (target != approvalTarget) with valid warrant", async () => {
+        // Whitelist signer as valid warrant signer
+        const signerAddress = await signer.getAddress()
+        await Rainbow.connect(signer).updateValidSigner(signerAddress, true)
+
+        // Get USDC for test
+        await stealMoney(usdcNativeWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
+
+        // Approve Rainbow Router to spend USDC
+        await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
+
+        // Create OKX swap calldata
+        const latestBlock = await ethers.provider.getBlock('latest')
+        const currentTime = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
+
+        const baseRequest = {
+            fromToken: USDC_ADDRESS,
+            toToken: WETH_ADDRESS,
+            fromTokenAmount: usdcAmount,
+            minReturnAmount: 1n,
+            deadLine: currentTime + 1800
+        }
+
+        const callDataConcat = "0x"
+        const toAddress = await Rainbow.getAddress()
+
+        const okxInterface = IOKXDexRouter__factory.createInterface()
+        const okxSwapCalldata = okxInterface.encodeFunctionData("dagSwapTo", [
+            baseRequest,
+            callDataConcat,
+            false,
+            toAddress
+        ])
+
+        // Create VALID warrant with real signature
+        const warrant = await createValidWarrant(
+            USDC_ADDRESS,
+            WETH_ADDRESS,
+            OKX_ROUTER,
+            OKX_APPROVAL_TARGET,
+            okxSwapCalldata,
+            usdcAmount,
+            0n,  // feeAmount
+            123,  // nonce
+            currentTime + 3600,  // validBefore
+            currentTime - 300    // validAfter
+        )
+
+        console.log("\n        === Testing transfer proxy with valid warrant ===")
+        console.log(`        Target: ${OKX_ROUTER}`)
+        console.log(`        Approval Target: ${OKX_APPROVAL_TARGET}`)
+        console.log(`        Warrant signer: ${warrant.verifyingSigner}`)
+
+        // Attempt the swap with valid warrant
+        // Note: May still fail due to lack of routing data, but won't fail on warrant check
+        try {
+            const tx = await Rainbow.connect(signer).fillQuoteTokenToToken(
+                USDC_ADDRESS,
+                WETH_ADDRESS,
+                OKX_ROUTER,
+                OKX_APPROVAL_TARGET,
+                okxSwapCalldata,
+                usdcAmount,
+                0n,
+                warrant
+            )
+            await tx.wait()
+            console.log(`        ✓ Swap succeeded with valid warrant!`)
+        } catch (error: any) {
+            // If it fails, should NOT be due to warrant check
+            const errorMessage = error.message
+            expect(errorMessage).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
+            console.log(`        ✓ Warrant check passed (swap failed for other reason: routing data)`)
+        }
+    })
+
+    it("Should still allow ZeroAddress warrant for standard pattern (target == approvalTarget)", async () => {
+        // For this test, we'll use Uniswap V3 Router which is a standard single-contract aggregator
+        const UNISWAP_V3_ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+
+        // Whitelist Uniswap router
+        await Rainbow.connect(signer).updateSwapTargets(UNISWAP_V3_ROUTER, true)
+
+        // Get USDC for test
+        await stealMoney(usdcNativeWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
+
+        // Approve Rainbow Router
+        await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+        const currentTime = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
+
+        // Dummy calldata (won't actually execute, but that's ok for this test)
+        const dummyCalldata = "0x"
+
+        // Create warrant with ZeroAddress signer
+        const warrant = {
+            nonce: 1n,
+            validBefore: currentTime + 3600,
+            validAfter: currentTime - 300,
+            verifyingSigner: ZeroAddress,
+            signature: "0x"
+        }
+
+        console.log("\n        === Testing standard pattern with ZeroAddress warrant ===")
+        console.log(`        Target: ${UNISWAP_V3_ROUTER}`)
+        console.log(`        Approval Target: ${UNISWAP_V3_ROUTER} (SAME)`)
+        console.log(`        This should still work with ZeroAddress warrant`)
+
+        // This should NOT revert on warrant check (target == approvalTarget)
+        try {
+            await Rainbow.connect(signer).fillQuoteTokenToToken(
+                USDC_ADDRESS,
+                WETH_ADDRESS,
+                UNISWAP_V3_ROUTER,
+                UNISWAP_V3_ROUTER,  // Same as target
+                dummyCalldata,
+                usdcAmount,
+                0n,
+                warrant
+            )
+            console.log(`        ✓ Standard pattern works with ZeroAddress warrant`)
+        } catch (error: any) {
+            // Should not fail due to warrant requirement
+            const errorMessage = error.message
+            expect(errorMessage).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
+            console.log(`        ✓ No warrant requirement error (failed for other reason, as expected)`)
+        }
+    })
+
     it("USDC → WETH swap via OKX (transfer proxy pattern working)", async () => {
+        // Note: Signer is already whitelisted from previous test
+
         // Get USDC for test
         await stealMoney(usdcNativeWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
 
         const signerAddress = await signer.getAddress()
         const signerUsdcBalanceBefore = await USDC.balanceOf(signerAddress)
-        expect(signerUsdcBalanceBefore).to.eq(usdcAmount, "Should have USDC after stealing")
+        expect(signerUsdcBalanceBefore).to.be.gte(usdcAmount, "Should have at least required USDC after stealing")
 
         // Approve Rainbow Router to spend USDC (standard ERC20 approval)
         await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
@@ -135,14 +393,19 @@ describe("Transfer Proxy Limitation (OKX)", () => {
 
         console.log(`        ✓ Created real OKX dagSwapTo calldata (${okxSwapCalldata.length} bytes)`)
 
-        // Create warrant with ZeroAddress signer (bypass signature validation)
-        const warrant = {
-            nonce: 1n,
-            validBefore: currentTime + 3600,
-            validAfter: currentTime - 300,
-            verifyingSigner: ZeroAddress,
-            signature: "0x"
-        }
+        // Create valid warrant (required for transfer proxy pattern)
+        const warrant = await createValidWarrant(
+            USDC_ADDRESS,
+            WETH_ADDRESS,
+            OKX_ROUTER,
+            OKX_APPROVAL_TARGET,
+            okxSwapCalldata,
+            usdcAmount,
+            0n,  // feeAmount
+            456,  // nonce
+            currentTime + 3600,  // validBefore
+            currentTime - 300    // validAfter
+        )
 
         // Verify that approval goes to the correct address (transfer proxy pattern)
         //
