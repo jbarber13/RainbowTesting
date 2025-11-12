@@ -3,3 +3,4 @@
 /* eslint-disable */
 import type * as iKyberSwapRouterSol from "./IKyberSwapRouter.sol";
 export type { iKyberSwapRouterSol };
+export type { IOKXDexRouter } from "./IOKXDexRouter";

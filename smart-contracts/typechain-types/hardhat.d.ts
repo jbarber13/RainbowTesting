@@ -66,6 +66,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IMetaAggregationRouterV2__factory>;
     getContractFactory(
+      name: "IOKXDexRouter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IOKXDexRouter__factory>;
+    getContractFactory(
       name: "IDAI",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IDAI__factory>;
@@ -212,6 +216,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IMetaAggregationRouterV2>;
     getContractAt(
+      name: "IOKXDexRouter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IOKXDexRouter>;
+    getContractAt(
       name: "IDAI",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -365,6 +374,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IMetaAggregationRouterV2>;
     deployContract(
+      name: "IOKXDexRouter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IOKXDexRouter>;
+    deployContract(
       name: "IDAI",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IDAI>;
@@ -510,6 +523,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IMetaAggregationRouterV2>;
+    deployContract(
+      name: "IOKXDexRouter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IOKXDexRouter>;
     deployContract(
       name: "IDAI",
       args: any[],

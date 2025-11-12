@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as iKyberSwapRouterSol from "./IKyberSwapRouter.sol";
+export { IOKXDexRouter__factory } from "./IOKXDexRouter__factory";
