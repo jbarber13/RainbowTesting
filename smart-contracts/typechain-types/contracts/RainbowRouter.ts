@@ -129,6 +129,7 @@ export interface RainbowRouterInterface extends Interface {
     values: [
       AddressLike,
       AddressLike,
+      AddressLike,
       BytesLike,
       BigNumberish,
       BigNumberish,
@@ -138,6 +139,7 @@ export interface RainbowRouterInterface extends Interface {
   encodeFunctionData(
     functionFragment: "fillQuoteTokenToEthWithPermit",
     values: [
+      AddressLike,
       AddressLike,
       AddressLike,
       BytesLike,
@@ -153,6 +155,7 @@ export interface RainbowRouterInterface extends Interface {
       AddressLike,
       AddressLike,
       AddressLike,
+      AddressLike,
       BytesLike,
       BigNumberish,
       BigNumberish,
@@ -162,6 +165,7 @@ export interface RainbowRouterInterface extends Interface {
   encodeFunctionData(
     functionFragment: "fillQuoteTokenToTokenWithPermit",
     values: [
+      AddressLike,
       AddressLike,
       AddressLike,
       AddressLike,
@@ -438,6 +442,7 @@ export interface RainbowRouter extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -451,6 +456,7 @@ export interface RainbowRouter extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -466,6 +472,7 @@ export interface RainbowRouter extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -480,6 +487,7 @@ export interface RainbowRouter extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -570,6 +578,7 @@ export interface RainbowRouter extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -584,6 +593,7 @@ export interface RainbowRouter extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -600,6 +610,7 @@ export interface RainbowRouter extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -615,6 +626,7 @@ export interface RainbowRouter extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,

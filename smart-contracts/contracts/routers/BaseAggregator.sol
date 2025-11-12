@@ -141,6 +141,7 @@ contract BaseAggregator is EIP712 {
     /// @param sellTokenAddress the address of token that the user is selling
     /// @param buyTokenAddress the address of token that the user should receive
     /// @param target the address of the aggregator contract that will exec the swap
+    /// @param approvalTarget the address that needs token approval (may differ from target for transfer proxy patterns)
     /// @param swapCallData the calldata that will be passed to the aggregator contract
     /// @param sellAmount the amount of tokens that the user is selling
     /// @param feeAmount the amount of the tokens to sell that we will take as a fee
@@ -148,6 +149,7 @@ contract BaseAggregator is EIP712 {
         address sellTokenAddress,
         address buyTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feeAmount,
@@ -157,12 +159,14 @@ contract BaseAggregator is EIP712 {
         payable
         nonReentrant
         onlyApprovedTarget(target)
+        onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         _fillQuoteTokenToToken(
             sellTokenAddress,
             buyTokenAddress,
             target,
+            approvalTarget,
             swapCallData,
             sellAmount,
             feeAmount,
@@ -176,6 +180,7 @@ contract BaseAggregator is EIP712 {
     /// @param sellTokenAddress the address of token that the user is selling
     /// @param buyTokenAddress the address of token that the user should receive
     /// @param target the address of the aggregator contract that will exec the swap
+    /// @param approvalTarget the address that needs token approval (may differ from target for transfer proxy patterns)
     /// @param swapCallData the calldata that will be passed to the aggregator contract
     /// @param sellAmount the amount of tokens that the user is selling
     /// @param feeAmount the amount of the tokens to sell that we will take as a fee
@@ -184,6 +189,7 @@ contract BaseAggregator is EIP712 {
         address sellTokenAddress,
         address buyTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feeAmount,
@@ -194,6 +200,7 @@ contract BaseAggregator is EIP712 {
         payable
         nonReentrant
         onlyApprovedTarget(target)
+        onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         // 1 - Apply permit
@@ -213,6 +220,7 @@ contract BaseAggregator is EIP712 {
             sellTokenAddress,
             buyTokenAddress,
             target,
+            approvalTarget,
             swapCallData,
             sellAmount,
             feeAmount,
@@ -224,12 +232,14 @@ contract BaseAggregator is EIP712 {
     /// @dev method that executes ERC20 to ETH token swaps with the ability to take a fee from the output
     /// @param sellTokenAddress the address of token that the user is selling
     /// @param target the address of the aggregator contract that will exec the swap
+    /// @param approvalTarget the address that needs token approval (may differ from target for transfer proxy patterns)
     /// @param swapCallData the calldata that will be passed to the aggregator contract
     /// @param sellAmount the amount of tokens that the user is selling
     /// @param feePercentageBasisPoints the amount of ETH that we will take as a fee in 1e18 basis points (basis points with 4 decimals plus 14 extra decimals of precision)
     function fillQuoteTokenToEth(
         address sellTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feePercentageBasisPoints,
@@ -239,11 +249,13 @@ contract BaseAggregator is EIP712 {
         payable
         nonReentrant
         onlyApprovedTarget(target)
+        onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         _fillQuoteTokenToEth(
             sellTokenAddress,
             target,
+            approvalTarget,
             swapCallData,
             sellAmount,
             feePercentageBasisPoints,
@@ -256,6 +268,7 @@ contract BaseAggregator is EIP712 {
     // and accepts a signature to use permit, so the user doesn't have to make an previous approval transaction
     /// @param sellTokenAddress the address of token that the user is selling
     /// @param target the address of the aggregator contract that will exec the swap
+    /// @param approvalTarget the address that needs token approval (may differ from target for transfer proxy patterns)
     /// @param swapCallData the calldata that will be passed to the aggregator contract
     /// @param sellAmount the amount of tokens that the user is selling
     /// @param feePercentageBasisPoints the amount of ETH that we will take as a fee in 1e18 basis points (basis points with 4 decimals plus 14 extra decimals of precision)
@@ -263,6 +276,7 @@ contract BaseAggregator is EIP712 {
     function fillQuoteTokenToEthWithPermit(
         address sellTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feePercentageBasisPoints,
@@ -273,6 +287,7 @@ contract BaseAggregator is EIP712 {
         payable
         nonReentrant
         onlyApprovedTarget(target)
+        onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
         // 1 - Apply permit
@@ -291,6 +306,7 @@ contract BaseAggregator is EIP712 {
         _fillQuoteTokenToEth(
             sellTokenAddress,
             target,
+            approvalTarget,
             swapCallData,
             sellAmount,
             feePercentageBasisPoints,
@@ -306,6 +322,7 @@ contract BaseAggregator is EIP712 {
     function _fillQuoteTokenToEth(
         address sellTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feePercentageBasisPoints,
@@ -319,6 +336,7 @@ contract BaseAggregator is EIP712 {
                 abi.encode(
                     sellTokenAddress,
                     target,
+                    approvalTarget,
                     keccak256(swapCallData),
                     sellAmount,
                     feePercentageBasisPoints
@@ -342,10 +360,10 @@ contract BaseAggregator is EIP712 {
             );
         }
 
-        // 3 - Approve the aggregator's contract to swap the tokens
+        // 3 - Approve the aggregator's approval target to swap the tokens
         SafeERC20.safeIncreaseAllowance(
             IERC20(sellTokenAddress),
-            target,
+            approvalTarget,
             sellAmount
         );
 
@@ -366,7 +384,7 @@ contract BaseAggregator is EIP712 {
         // 5 - Check that the tokens were fully spent during the swap
         uint256 allowance = IERC20(sellTokenAddress).allowance(
             address(this),
-            target
+            approvalTarget
         );
         require(allowance == 0, "ALLOWANCE_NOT_ZERO");
 
@@ -394,6 +412,7 @@ contract BaseAggregator is EIP712 {
         address sellTokenAddress,
         address buyTokenAddress,
         address payable target,
+        address approvalTarget,
         bytes calldata swapCallData,
         uint256 sellAmount,
         uint256 feeAmount,
@@ -407,6 +426,7 @@ contract BaseAggregator is EIP712 {
                     sellTokenAddress,
                     buyTokenAddress,
                     target,
+                    approvalTarget,
                     keccak256(swapCallData),
                     sellAmount,
                     feeAmount
@@ -432,10 +452,10 @@ contract BaseAggregator is EIP712 {
             );
         }
 
-        // 3 - Approve the aggregator's contract to swap the tokens if needed
+        // 3 - Approve the aggregator's approval target to swap the tokens if needed
         SafeERC20.safeIncreaseAllowance(
             IERC20(sellTokenAddress),
-            target,
+            approvalTarget,
             sellAmount - feeAmount
         );
 
@@ -461,7 +481,7 @@ contract BaseAggregator is EIP712 {
         // 5 - Check that the tokens were fully spent during the swap
         uint256 allowance = IERC20(sellTokenAddress).allowance(
             address(this),
-            target
+            approvalTarget
         );
         require(allowance == 0, "ALLOWANCE_NOT_ZERO");
 

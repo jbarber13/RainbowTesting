@@ -111,6 +111,7 @@ export interface BaseAggregatorInterface extends Interface {
     values: [
       AddressLike,
       AddressLike,
+      AddressLike,
       BytesLike,
       BigNumberish,
       BigNumberish,
@@ -120,6 +121,7 @@ export interface BaseAggregatorInterface extends Interface {
   encodeFunctionData(
     functionFragment: "fillQuoteTokenToEthWithPermit",
     values: [
+      AddressLike,
       AddressLike,
       AddressLike,
       BytesLike,
@@ -135,6 +137,7 @@ export interface BaseAggregatorInterface extends Interface {
       AddressLike,
       AddressLike,
       AddressLike,
+      AddressLike,
       BytesLike,
       BigNumberish,
       BigNumberish,
@@ -144,6 +147,7 @@ export interface BaseAggregatorInterface extends Interface {
   encodeFunctionData(
     functionFragment: "fillQuoteTokenToTokenWithPermit",
     values: [
+      AddressLike,
       AddressLike,
       AddressLike,
       AddressLike,
@@ -282,6 +286,7 @@ export interface BaseAggregator extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -295,6 +300,7 @@ export interface BaseAggregator extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -310,6 +316,7 @@ export interface BaseAggregator extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -324,6 +331,7 @@ export interface BaseAggregator extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -378,6 +386,7 @@ export interface BaseAggregator extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -392,6 +401,7 @@ export interface BaseAggregator extends BaseContract {
     [
       sellTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feePercentageBasisPoints: BigNumberish,
@@ -408,6 +418,7 @@ export interface BaseAggregator extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
@@ -423,6 +434,7 @@ export interface BaseAggregator extends BaseContract {
       sellTokenAddress: AddressLike,
       buyTokenAddress: AddressLike,
       target: AddressLike,
+      approvalTarget: AddressLike,
       swapCallData: BytesLike,
       sellAmount: BigNumberish,
       feeAmount: BigNumberish,
