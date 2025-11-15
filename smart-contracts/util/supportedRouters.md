@@ -1,98 +1,240 @@
-# SWAP ROUTERS BY CHAIN
+# Supported Routers by Chain
 
-   ## Chain-specific Swap Router Support
+## Arbitrum (arbitrum) - 8 routers
+Chain ID: 42161
 
-   Based on the codebase analysis, here are the supported swap routers (DEX aggregators) for each blockchain network:
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **IceCreamSwap**: `0xBb8502132C87Ea3bBEc69c7Bc82221FCC1C0e2E4`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **PropellerSwap**: Dynamic - router address returned in API response
+- **ZeroEx**: `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`
 
-   ### ETHEREUM (Chain ID: 1)
-   - All dynamically supported routers via their APIs
-   - Typical: ODOS, 1Inch, ParaSwap, OKX, OpenOcean, KyberSwap, ZeroEx, Enso, CowSwap
+## Avalanche (avalanche) - 2 routers
+Chain ID: 43114
 
-   ### OPTIMISM (Chain ID: 10)
-   - KyberSwap
-   - 1Inch
-   - ParaSwap
-   - OpenOcean
-   - ZeroEx
-   - CowSwap
-   - IceCreamSwap
-   - Rainbow Router wrapper available: 0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **OpenOcean**: Dynamic - router address returned in API response
 
-   ### ARBITRUM (Chain ID: 42161)
-   - KyberSwap
-   - 1Inch
-   - ParaSwap
-   - PropellerSwap
-   - OpenOcean
-   - ZeroEx
-   - CowSwap
-   - IceCreamSwap
+## Base (base) - 7 routers
+Chain ID: 8453
 
-   ### BASE (Chain ID: 8453)
-   - KyberSwap
-   - 1Inch
-   - ParaSwap
-   - OpenOcean
-   - ZeroEx
-   - IceCreamSwap
-   - CowSwap
-   - Rainbow Router wrapper available: 0xA89A26c4d81A2cca4d0670F77f0FC88362b72248
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **IceCreamSwap**: `0x59D3cD61af4F7A1b09A34cf5c6ceDd8D5e1D6C67`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **ZeroEx**: `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`
 
-   ### POLYGON (Chain ID: 137)
-   - KyberSwap
-   - 1Inch
-   - ParaSwap
-   - OpenOcean
-   - ZeroEx
-   - CowSwap
-   - IceCreamSwap
+## Blast (blast) - 4 routers
+Chain ID: 81457
 
-   ### AVALANCHE (Chain ID: 43114)
-   - OpenOcean
-   - CowSwap
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
 
-   ### WORLDCHAIN (Chain ID: 480)
-   - Available routers (needs API verification)
-   - Rainbow Router wrapper available: 0x25cf2128F603754179379351B805B4F8C0B8dCA4
+## BNB (bsc) - 8 routers
+Chain ID: 56
 
-   ### BSC - BINANCE SMART CHAIN (Chain ID: 56)
-   - Multiple DEX aggregators (dynamic via API)
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **AirSwap**: P2P - no router contract
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **PropellerSwap**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
 
-   ### SCROLL
-   - Available routers (dynamic via API)
+## BOB (bob) - 1 router
+Chain ID: 60808
 
-   ### LINEA
-   - Available routers (dynamic via API)
+- **IceCreamSwap**: Well-known address not configured
 
-   ### MANTLE
-   - Available routers (dynamic via API)
+## Boba (boba) - 1 router
+Chain ID: 288
 
-   ### BLAST
-   - Available routers (dynamic via API)
+- **IceCreamSwap**: Well-known address not configured
 
-   ### GNOSIS (Chain ID: 100)
-   - Available routers
+## Celo (celo) - 2 routers
+Chain ID: 42220
 
-   ### MOONBEAM
-   - Available routers
+- **IceCreamSwap**: Well-known address not configured
+- **OpenOcean**: Dynamic - router address returned in API response
 
-   ### CELO
-   - Available routers
+## Ethereum (ethereum) - 8 routers
+Chain ID: 1
 
-   ### SONIC
-   - Available routers
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **AirSwap**: P2P - no router contract
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **PropellerSwap**: Dynamic - router address returned in API response
+- **ZeroEx**: `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`
 
-   ### TAIKO
-   - Available routers
+## Etherlink (etherlink) - 2 routers
+Chain ID: 42793
 
-   ### UNICHAIN
-   - Available routers
+- **KyberSwap**: Dynamic - router address returned in API response
+- **ThreeRoute**: Dynamic - router address returned in API response
 
-   ### LISK
-   - Available routers
+## Gnosis (gnosis) - 4 routers
+Chain ID: 100
 
-   ### BOBA
-   - Available routers
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
 
-   ### ZORA
-   - Available routers (if supported)
+## Hemi (hemi) - 1 router
+Chain ID: 43111
+
+- **IceCreamSwap**: Well-known address not configured
+
+## Lens (lens) - 1 router
+Chain ID: 232
+
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+
+## LightLink (lightlink) - 1 router
+Chain ID: 1890
+
+- **IceCreamSwap**: Well-known address not configured
+
+## Linea (linea) - 5 routers
+Chain ID: 59144
+
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
+
+## Manta Pacific (manta) - 1 router
+Chain ID: 169
+
+- **OpenOcean**: Dynamic - router address returned in API response
+
+## Mantle (mantle) - 3 routers
+Chain ID: 5000
+
+- **IceCreamSwap**: Well-known address not configured
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
+
+## Moonbeam (moonbeam) - 1 router
+Chain ID: 1284
+
+- **IceCreamSwap**: Well-known address not configured
+
+## Optimism (optimism) - 6 routers
+Chain ID: 10
+
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **IceCreamSwap**: `0x1C57E4BacE8038Ab278b8D65E0048f2aC2FAf58E`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **ZeroEx**: `0xDef1ABe6c01f4E5db6C63aEfE0053E316ab77c37`
+
+## Plasma (plasma) - 3 routers
+Chain ID: 9745
+
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
+
+## Polygon (polygon) - 9 routers
+Chain ID: 137
+
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **AirSwap**: P2P - no router contract
+- **CowSwap**: `Settlement: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41, Vault Relayer: 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110`
+- **IceCreamSwap**: `0x917b9fa5CaEA2c955e5E8c2D071d5ac71Ad7eF1E`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **PropellerSwap**: Dynamic - router address returned in API response
+- **ZeroEx**: `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`
+
+## Polygon zkEVM (polygon-zkevm) - 3 routers
+Chain ID: 1101
+
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+
+## Rootstock (rootstock) - 2 routers
+Chain ID: 30
+
+- **IceCreamSwap**: Well-known address not configured
+- **OpenOcean**: Dynamic - router address returned in API response
+
+## Scroll (scroll) - 4 routers
+Chain ID: 534352
+
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ZeroEx**: Well-known address not configured
+
+## Sei Network (sei) - 2 routers
+Chain ID: 1329
+
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **OpenOcean**: Dynamic - router address returned in API response
+
+## Sonic (sonic) - 4 routers
+Chain ID: 146
+
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+
+## Taiko Mainnet (taiko) - 1 router
+Chain ID: 167000
+
+- **IceCreamSwap**: Well-known address not configured
+
+## Telos (telos) - 2 routers
+Chain ID: 40
+
+- **IceCreamSwap**: Well-known address not configured
+- **OpenOcean**: Dynamic - router address returned in API response
+
+## Unichain (unichain) - 6 routers
+Chain ID: 130
+
+- **1Inch**: `0x111111125421ca6dc452d289314280a0f8842a65`
+- **IceCreamSwap**: Well-known address not configured
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **ParaSwap**: `0x6A000F20005980200259B80c5102003040001068`
+- **ZeroEx**: Well-known address not configured
+
+## World Chain (worldchain) - 1 router
+Chain ID: 480
+
+- **ZeroEx**: Well-known address not configured
+
+## XDC (xdc) - 1 router
+Chain ID: 50
+
+- **IceCreamSwap**: Well-known address not configured
+
+## ZKsync Era (zksync) - 4 routers
+Chain ID: 324
+
+- **1Inch**: `0x6fd4383cb451173d5f9304f041c7bcbf27d561ff`
+- **KyberSwap**: Dynamic - router address returned in API response
+- **OpenOcean**: Dynamic - router address returned in API response
+- **PropellerSwap**: Dynamic - router address returned in API response
+
+
+---
