@@ -102,6 +102,7 @@ describe("Permit Signature", () => {
             await USDC.getAddress(),
             await WETH.getAddress(),
             routerAddr,
+            routerAddr, // approvalTarget - same as target
             txData,
             usdcAmount,
             0n,
@@ -233,8 +234,8 @@ describe("Permit Signature", () => {
 
         const dataHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(
-                ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-                [sellTokenAddress, buyTokenAddress, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
+                ['address', 'address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+                [sellTokenAddress, buyTokenAddress, routerAddr, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
             )
         )
         const nonceBI = BigInt(nonce)
@@ -285,6 +286,7 @@ describe("Permit Signature", () => {
             sellTokenAddress,
             buyTokenAddress,
             routerAddr,
+            routerAddr, // approvalTarget - same as target
             swapCallData,
             usdcAmount,
             feeAmount,
@@ -324,8 +326,8 @@ describe("Permit Signature", () => {
 
         const dataHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(
-                ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-                [sellTokenAddress, buyTokenAddress, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
+                ['address', 'address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+                [sellTokenAddress, buyTokenAddress, routerAddr, routerAddr, swapCallDataHash, usdcAmount, feeAmount]
             )
         )
         const nonceBI = BigInt(nonce)
@@ -378,6 +380,7 @@ describe("Permit Signature", () => {
             sellTokenAddress,
             buyTokenAddress,
             routerAddr,
+            routerAddr, // approvalTarget - same as target
             swapCallData,
             usdcAmount,
             feeAmount,

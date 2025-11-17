@@ -91,6 +91,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                     OPTIMISM_TOKENS.USDC,
                     OPTIMISM_TOKENS.WETH,
                     UNISWAP_V3_ROUTER,
+                    UNISWAP_V3_ROUTER, // approvalTarget - same as target
                     swapCallData,
                     sellAmount,
                     0n,
@@ -132,6 +133,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                     OPTIMISM_TOKENS.USDC,
                     OPTIMISM_TOKENS.WETH,
                     UNISWAP_V3_ROUTER,
+                    UNISWAP_V3_ROUTER, // approvalTarget - same as target
                     swapCallData,
                     sellAmount,
                     0n,
@@ -181,6 +183,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                     OPTIMISM_TOKENS.USDC,
                     OPTIMISM_TOKENS.WETH,
                     UNISWAP_V3_ROUTER,
+                    UNISWAP_V3_ROUTER, // approvalTarget - same as target
                     swapCallData,
                     sellAmount,
                     0n,
@@ -224,6 +227,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                 OPTIMISM_TOKENS.USDC,
                 OPTIMISM_TOKENS.WETH,
                 UNISWAP_V3_ROUTER,
+                UNISWAP_V3_ROUTER, // approvalTarget - same as target
                 swapCallData,
                 sellAmount,
                 0n,
@@ -267,6 +271,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                     OPTIMISM_TOKENS.USDC,
                     OPTIMISM_TOKENS.WETH,
                     unapprovedTarget,
+                    unapprovedTarget, // approvalTarget - same as target
                     swapCallData,
                     sellAmount,
                     0n,
@@ -311,6 +316,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                     OPTIMISM_TOKENS.USDC,
                     OPTIMISM_TOKENS.WETH,
                     UNISWAP_V3_ROUTER,
+                    UNISWAP_V3_ROUTER, // approvalTarget - same as target
                     swapCallData,
                     sellAmount,
                     0n,
@@ -357,6 +363,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                 OPTIMISM_TOKENS.USDC,
                 OPTIMISM_TOKENS.WETH,
                 UNISWAP_V3_ROUTER,
+                UNISWAP_V3_ROUTER, // approvalTarget - same as target
                 swapCallData,
                 sellAmount,
                 feeAmount,
@@ -405,6 +412,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                 OPTIMISM_TOKENS.USDC,
                 OPTIMISM_TOKENS.WETH,
                 UNISWAP_V3_ROUTER,
+                UNISWAP_V3_ROUTER, // approvalTarget - same as target
                 swapCallData,
                 sellAmount,
                 feeAmount,
@@ -450,6 +458,7 @@ describe("RainbowRouter Comprehensive Coverage", () => {
                 OPTIMISM_TOKENS.USDC,
                 OPTIMISM_TOKENS.WETH,
                 UNISWAP_V3_ROUTER,
+                UNISWAP_V3_ROUTER, // approvalTarget - same as target
                 swapCallData,
                 sellAmount,
                 0n,

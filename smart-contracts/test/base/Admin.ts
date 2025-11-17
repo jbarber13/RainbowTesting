@@ -334,6 +334,7 @@ describe("Admin", function () {
       instance.connect(attacker).fillQuoteTokenToEth(
         wethAddress, // tokenToSell? - Assuming WETH
         wethAddress, // target token address? Needs clarification based on function signature
+        wethAddress, // approvalTarget - same as target for this test
         maliciousCalldata, // The swap calldata to the target
         attackerSellAmount, // amountToSell
         0n, // minAmountOut
@@ -388,6 +389,7 @@ describe("Admin", function () {
       instance.connect(attacker).fillQuoteTokenToEth(
         wethAddress,
         wethAddress, // Adjust if needed
+        wethAddress, // approvalTarget - same as target for this test
         maliciousCalldata,
         attackerSellAmount,
         0n,

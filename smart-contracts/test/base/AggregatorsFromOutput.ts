@@ -190,6 +190,7 @@ describe("RainbowRouter Aggregators", function () {
         quote.sellTokenAddress,
         quote.buyTokenAddress,
         quote.to || ZeroAddress,
+        quote.to || ZeroAddress, // approvalTarget - same as target for standard aggregators
         quote.data || Sources.Aggregator0x,
         quote.sellAmount,
         quote.fee,
@@ -280,6 +281,7 @@ describe("RainbowRouter Aggregators", function () {
         quote.sellTokenAddress,
         quote.buyTokenAddress,
         quote.to || ZeroAddress,
+        quote.to || ZeroAddress, // approvalTarget - same as target for standard aggregators
         quote.data || Sources.Aggregator0x,
         quote.sellAmount,
         quote.fee,
