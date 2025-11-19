@@ -219,13 +219,13 @@ async function testRouter(
   const inputAmount = parseUnits(tradeConfig.testAmount, inToken.decimals);
   const params: canoeParams = {
     chain: CONFIG.chain,
-    account: CONFIG.rainbowRouterAddress, // Rainbow Router will override dstAddress when useRainbow: true
+    account: CONFIG.rainbowRouterAddress, // Rainbow Router will override dstAddress when useOkuRouter: true
     isExactIn: true,
     inTokenAddress: originalInToken.address,
     outTokenAddress: originalOutToken.address,
     inTokenAmount: tradeConfig.testAmount,
     slippage: CONFIG.slippage,
-    useRainbow: true,
+    useOkuRouter: true,
     getCalldata: true
   };
 

@@ -20,6 +20,20 @@ function sleep(ms: number): Promise<void> {
 
 // Router addresses by chain ID
 const ROUTERS_BY_CHAIN: Record<number, string[]> = {
+  // Optimism (10)
+  10: [
+    "0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf", // Enso
+    "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", // IceCreamSwap
+    "0xca423977156bb05b13a2ba3b76bc5419e2fe9680", // Odos
+    "0x111111125421ca6dc452d289314280a0f8842a65", // 1inch
+    "0x6A000F20005980200259B80c5102003040001068", // ParaSwap
+    "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", // KyberSwap
+    "0xad1D43efCF92133A9a0f33e5936F5ca10f2b012E", // Unizen
+    "0xC44C6550a3B13116F6fD593e1ec963d5aE78C4C8", // OKX Router
+    "0x68D6B739D2020067D1e2F713b999dA97E4d54812", // OKX Approval Target
+    "0xDEF1ABE32c034e558Cdd535791643C58a13aCC10", // 0x Exchange Proxy (execution)
+    "0x0000000000001fF3684f28c67538d4D072C22734", // 0x AllowanceHolder (approvals)
+  ],
   // Worldchain (480)
   480: [
     "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", // icecreamswap
@@ -58,7 +72,7 @@ async function main() {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.BASE_URL!
+            jsonRpcUrl: process.env.OP_URL!
           },
         },
       ],
@@ -125,7 +139,7 @@ async function main() {
 
       // Add delay between transactions to avoid overloading RPC (only for mainnet)
       if (mainnet && i < routers.length - 1) {
-        await sleep(2000)
+        await sleep(3000)
       }
     }
     console.log("All swap targets updated successfully")

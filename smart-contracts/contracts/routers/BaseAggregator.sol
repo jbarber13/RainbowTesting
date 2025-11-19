@@ -162,12 +162,6 @@ contract BaseAggregator is EIP712 {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
-        // Require warrant validation for transfer proxy pattern
-        require(
-            target == approvalTarget || warrant.verifyingSigner != address(0),
-            "CANOE: WARRANT_REQUIRED_FOR_PROXY"
-        );
-
         _fillQuoteTokenToToken(
             sellTokenAddress,
             buyTokenAddress,
@@ -209,12 +203,6 @@ contract BaseAggregator is EIP712 {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
-        // Require warrant validation for transfer proxy pattern
-        require(
-            target == approvalTarget || warrant.verifyingSigner != address(0),
-            "CANOE: WARRANT_REQUIRED_FOR_PROXY"
-        );
-
         // 1 - Apply permit
         // NOTE: For Permit2, this transfers tokens directly to address(this)
         // NOTE: For DAI/EIP-2612, this only grants allowance
@@ -264,12 +252,6 @@ contract BaseAggregator is EIP712 {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
-        // Require warrant validation for transfer proxy pattern
-        require(
-            target == approvalTarget || warrant.verifyingSigner != address(0),
-            "CANOE: WARRANT_REQUIRED_FOR_PROXY"
-        );
-
         _fillQuoteTokenToEth(
             sellTokenAddress,
             target,
@@ -308,12 +290,6 @@ contract BaseAggregator is EIP712 {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
-        // Require warrant validation for transfer proxy pattern
-        require(
-            target == approvalTarget || warrant.verifyingSigner != address(0),
-            "CANOE: WARRANT_REQUIRED_FOR_PROXY"
-        );
-
         // 1 - Apply permit
         // NOTE: For Permit2, this transfers tokens directly to address(this)
         // NOTE: For DAI/EIP-2612, this only grants allowance

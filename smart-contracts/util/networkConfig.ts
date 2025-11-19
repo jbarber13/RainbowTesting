@@ -25,7 +25,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "op",
         chainId: 10,
         chainName: "optimism",
-        rainbowRouterAddress: "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A",
+        rainbowRouterAddress: "0xA90845CFc60488cCB917169EeDCF3577092Df29f",  // NEW DEPLOYMENT with approvalTarget support
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
         nativeSymbol: "ETH",
@@ -36,7 +36,9 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             "oneinch",
             "paraswap",
             "kyberswap",
-            "unizen"
+            "unizen",
+            "okx",     // Now supported with transfer proxy!
+            "zeroex"  // Now supported with transfer proxy!
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
         rpcUrl: process.env.OP_URL

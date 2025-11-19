@@ -4,7 +4,7 @@ export interface ExecutionRequest {
   coupon: Coupon;
   signingRequest?: SigningRequest;
   blockaidSim?: boolean;
-  useRainbow?: boolean;
+  useOkuRouter?: boolean;
 }
 
 export interface Coupon {

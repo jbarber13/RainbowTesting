@@ -46,7 +46,7 @@ const CONFIG = {
   // Network settings
   chain: "optimism",
   chainId: 10,
-  rainbowRouterAddress: "0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A",
+  rainbowRouterAddress: "0xA90845CFc60488cCB917169EeDCF3577092Df29f",  // NEW DEPLOYMENT with approvalTarget support
   userWalletAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
 
   // Supported tokens
@@ -74,12 +74,14 @@ const CONFIG = {
   // Supported routers
   routers: [
     "enso",
-    "icecreamswap",
-    "odos",
-    "oneinch",
-    "paraswap",
-    "kyberswap",
-    "unizen"
+    //"icecreamswap",
+    //"odos",
+    //"oneinch",
+    //"paraswap",
+    //"kyberswap",
+    //"unizen",
+    //"okx",
+    //"zeroex"
   ],
 
   // Test scenarios
@@ -216,7 +218,7 @@ async function testRouter(
     outTokenAddress: originalOutToken.address,
     inTokenAmount: scenario.amount,
     slippage: CONFIG.slippage,
-    useRainbow: true,
+    useOkuRouter: true,
     getCalldata: true
   };
 

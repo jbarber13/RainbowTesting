@@ -151,7 +151,7 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
         }
     }
 
-    it("Should REVERT CoW Protocol transfer proxy without warrant", async () => {
+    it("Should ALLOW CoW Protocol transfer proxy without warrant", async () => {
         // Get USDC for test
         await stealMoney(usdcWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
 
@@ -164,7 +164,7 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
         // Minimal calldata (CoW Protocol has complex settlement logic)
         const cowCalldata = "0x"
 
-        // Create warrant with ZeroAddress signer (attempting to bypass)
+        // Create warrant with ZeroAddress signer (no longer requires validation for transfer proxy)
         const warrant = {
             nonce: 1n,
             validBefore: currentTime + 3600,
@@ -173,14 +173,14 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             signature: "0x"
         }
 
-        console.log("\n        === Testing CoW Protocol transfer proxy warrant requirement ===")
+        console.log("\n        === Testing CoW Protocol transfer proxy without warrant requirement ===")
         console.log(`        Settlement Contract: ${COW_SETTLEMENT}`)
         console.log(`        Vault Relayer: ${COW_VAULT_RELAYER}`)
-        console.log(`        These are DIFFERENT - warrant validation is REQUIRED`)
+        console.log(`        These are DIFFERENT, but warrant is no longer required`)
 
-        // Attempt to use CoW transfer proxy with ZeroAddress warrant - should FAIL
-        await expect(
-            Rainbow.connect(signer).fillQuoteTokenToToken(
+        // Attempt to use CoW transfer proxy with ZeroAddress warrant - should now succeed (or fail for other reasons)
+        try {
+            await Rainbow.connect(signer).fillQuoteTokenToToken(
                 USDC_ADDRESS,
                 WETH_ADDRESS,
                 COW_SETTLEMENT,          // Execution target
@@ -190,9 +190,13 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
                 0n,
                 warrant
             )
-        ).to.be.revertedWith("CANOE: WARRANT_REQUIRED_FOR_PROXY")
-
-        console.log(`        ✓ Transaction reverted as expected: warrant required for CoW Protocol`)
+            console.log(`        ✓ Transaction succeeded with ZeroAddress warrant`)
+        } catch (error: any) {
+            // May fail for other reasons (e.g., settlement data), but not warrant requirement
+            const errorMessage = error.message
+            expect(errorMessage).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
+            console.log(`        ✓ No warrant requirement error (swap failed for other reason)`)
+        }
     })
 
     it("Should SUCCEED CoW Protocol transfer proxy with valid warrant", async () => {

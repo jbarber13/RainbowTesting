@@ -5,10 +5,10 @@ Network-specific router testing scripts for Rainbow Router deployments.
 ## Test Types
 
 ### Rainbow Router Tests
-Tests routers through the Rainbow Router contract (with `useRainbow=true`). These scripts validate the full Rainbow Router flow including whitelisting, permits, and warrant signatures.
+Tests routers through the Rainbow Router contract (with `useOkuRouter=true`). These scripts validate the full Rainbow Router flow including whitelisting, permits, and warrant signatures.
 
 ### Sanity Tests
-Tests routers with direct DEX swaps (with `useRainbow=false`). These scripts validate that the backend returns correct DEX target addresses and transaction data without going through Rainbow Router.
+Tests routers with direct DEX swaps (with `useOkuRouter=false`). These scripts validate that the backend returns correct DEX target addresses and transaction data without going through Rainbow Router.
 
 ## Scripts
 
