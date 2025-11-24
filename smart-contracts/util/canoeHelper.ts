@@ -119,7 +119,7 @@ export enum RainbowTxType {
 export type canoeParams = {
     chain: string,
     account: string,
-    userAddress?: string, // Optional: User wallet address (for permit owner when using usePermit)
+    userAddress?: string, // Optional: User wallet address (for permit owner when using usePermit/usePermit2)
     isExactIn: boolean,
     inTokenAddress: string,
     outTokenAddress: string,
@@ -127,7 +127,8 @@ export type canoeParams = {
     slippage: number,
     useOkuRouter?: boolean, // Optional flag for Oku Router (Rainbow Router) optimization
     getCalldata?: boolean, // Optional flag to get calldata, needed for oneinch
-    usePermit?: boolean // Optional flag to enable EIP-2612 permit signatures
+    usePermit?: boolean, // Optional flag to enable EIP-2612 permit signatures (deprecated)
+    usePermit2?: boolean // Optional flag to enable Permit2 signatures (recommended)
 }
 
 //depricated
@@ -644,6 +645,7 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
 export const getRainbowExecution = async (
     coupon: CouponInterface,
     market: string,
+    signingRequest?: any,
     baseUrl?: string
 ): Promise<RainbowExecutionInfo> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/execution_information`;
@@ -651,8 +653,26 @@ export const getRainbowExecution = async (
     // Minimal request body - Rainbow transformation already happened at quote time
     const requestBody: ExecutionRequest = {
         coupon: coupon,
-        useOkuRouter: true
+        useOkuRouter: true,
+        signingRequest: signingRequest // Full signing request with payload + signature
     };
+
+    // Debug: Log what we're sending to execution endpoint
+    if (signingRequest) {
+        console.log(`      [DEBUG] Sending signingRequest to execution endpoint:`, {
+            hasTypedData: !!signingRequest.typedData,
+            hasSignature: !!(signingRequest.typedData?.[0]?.signature),
+            signaturePreview: signingRequest.typedData?.[0]?.signature?.substring(0, 20) + '...'
+        });
+    } else {
+        console.log(`      [DEBUG] No signingRequest being sent to execution endpoint`);
+    }
+
+    console.log(`      [DEBUG] Full execution request:`, JSON.stringify({
+        hasCoupon: !!coupon,
+        useOkuRouter: true,
+        hasSigningRequest: !!signingRequest
+    }))
 
     try {
         const response = await axios.post(url, requestBody);
