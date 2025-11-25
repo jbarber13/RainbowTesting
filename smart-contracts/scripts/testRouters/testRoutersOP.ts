@@ -33,7 +33,7 @@ import {
 } from "../../util/canoeHelper";
 import { canoeParams } from "../../util/canoeHelper";
 import { Token } from "../canoeInterface";
-import { IERC20__factory } from "../../typechain-types";
+import { IERC20__factory, RainbowRouter__factory } from "../../typechain-types";
 
 // ============================================================================
 // CONFIGURATION - Optimism Network
@@ -134,8 +134,10 @@ interface RouterTestResult {
   scenario: string;
   success: boolean;
   error?: string;
+  warning?: string;
   gasUsed?: string;
   txHash?: string;
+  usingPermit2?: boolean;
   tokenReceived?: {
     amount: string;
     symbol: string;
@@ -155,6 +157,8 @@ async function main() {
   // Test each router with each scenario
   for (const router of CONFIG.routers) {
     for (const scenario of CONFIG.testScenarios) {
+      console.log(`\n📋 Testing ${router} - ${scenario.name}`);
+
       try {
         const setup = await setupTestEnvironment();
 
@@ -166,17 +170,14 @@ async function main() {
           );
         }
 
-        console.log(`\n📋 Testing ${router} - ${scenario.name}`);
         const result = await testRouter(router, scenario, setup);
         results.push(result);
 
-        if (result.success) {
-          console.log(`  ✅ ${router} - ${scenario.name}`);
-        } else {
-          console.log(`  ❌ ${router} - ${scenario.name}: ${result.error}`);
+        if (!result.success) {
+          console.log(`   ❌ Failed: ${result.error}`);
         }
       } catch (error: any) {
-        console.log(`  ❌ ${router} - ${scenario.name}: ${error.message}`);
+        console.log(`   ❌ Failed: ${error.message}`);
         results.push({
           router,
           scenario: scenario.name,
@@ -265,20 +266,21 @@ async function testRouter(
 
   try {
     // Step 1: Get quote
-    console.log(`      [${router}] Starting quote request...`);
-    const quoteStart = Date.now();
     const quoteResponse = await getRouterQuote(router, params);
-    const quoteEnd = Date.now();
-    console.log(`      [${router}] Quote received in ${quoteEnd - quoteStart}ms`);
 
     if (!quoteResponse || !quoteResponse.coupon) {
       throw new Error("Failed to get valid quote response");
     }
 
-    // Step 1.5: Handle Permit2 signature if required (graceful fallback if not present)
+    // Debug: Check what backend returned
+    console.log(`      📊 Backend Quote Response Analysis:`);
+    console.log(`         Has signingRequest: ${!!quoteResponse.signingRequest}`);
+
+    // Step 1.5: Handle Permit2 signature if required
     let permit2SigningRequest: any = undefined;
+    let permit2SignatureGenerated = false;
+
     if (quoteResponse.signingRequest?.typedData && quoteResponse.signingRequest.typedData.length > 0) {
-      console.log(`      [${router}] Signing Permit2 request...`);
       try {
         const typedDataPayload = quoteResponse.signingRequest.typedData[0].payload;
 
@@ -288,7 +290,6 @@ async function testRouter(
           typedDataPayload.types,
           typedDataPayload.message
         );
-        console.log(`      [${router}] Permit2 signature generated`);
 
         // Build the signing request with both payload and signature
         permit2SigningRequest = {
@@ -297,30 +298,22 @@ async function testRouter(
             signature: signature
           }]
         };
+        permit2SignatureGenerated = true;
       } catch (error: any) {
-        console.log(`      ⚠️  Permit2 signature failed, falling back to regular approval: ${error.message}`);
-        // permit2SigningRequest remains undefined, backend will use regular flow
+        throw new Error(`Permit2 signature failed: ${error.message}`);
       }
     } else if (params.usePermit2 && !inToken.isNative) {
-      // Backend didn't return signingRequest despite usePermit2=true (graceful fallback)
-      console.log(`      ℹ️  No Permit2 signingRequest in quote response, using regular approval flow`);
+      throw new Error("Backend did not return Permit2 signingRequest despite usePermit2=true");
     }
 
     // Step 2: Get Rainbow execution
-    // Rainbow transformation already happened at quote time
-    console.log(`      [${router}] Starting execution request...`);
-    const execStart = Date.now();
-
     const rainbowExecution = await getRainbowExecution(
       quoteResponse.coupon,
       router,
       permit2SigningRequest // Pass the full signing request (payload + signature)
     );
-    const execEnd = Date.now();
-    console.log(`      [${router}] Execution received in ${execEnd - execStart}ms`);
 
     // Get trade data
-    console.log(`      [${router}] Processing trade data...`);
     const trade = rainbowExecution.trade;
     if (!trade) {
       throw new Error("Invalid Rainbow execution response - no trade data found");
@@ -329,31 +322,23 @@ async function testRouter(
     // Verify transaction target is Rainbow Router (not DEX aggregator)
     if (trade.to.toLowerCase() !== CONFIG.rainbowRouterAddress.toLowerCase()) {
       throw new Error(
-        `Expected Rainbow Router address ${CONFIG.rainbowRouterAddress}, got ${trade.to}. ` +
-        `Backend may not have transformed to Rainbow Router correctly.`
+        `Expected Rainbow Router address ${CONFIG.rainbowRouterAddress}, got ${trade.to}`
       );
     }
 
-    // Verify approvals (if any) target Rainbow Router or Permit2
-    if (rainbowExecution.approvals && rainbowExecution.approvals.length > 0) {
-      for (const approval of rainbowExecution.approvals) {
-        if (approval.approvee) {
-          const isRainbowRouter = approval.approvee.toLowerCase() === CONFIG.rainbowRouterAddress.toLowerCase();
-          const isPermit2 = approval.approvee.toLowerCase() === PERMIT2_ADDRESS.toLowerCase();
+    // Decode the transaction to check function and parameters
+    const rainbowInterface = RainbowRouter__factory.createInterface();
+    const decoded = rainbowInterface.parseTransaction({ data: trade.data });
 
-          if (!isRainbowRouter && !isPermit2) {
-            throw new Error(
-              `Approval targets ${approval.approvee} instead of Rainbow Router (${CONFIG.rainbowRouterAddress}) or Permit2 (${PERMIT2_ADDRESS})`
-            );
-          }
-        }
-      }
+    if (!decoded) {
+      throw new Error("Failed to decode Rainbow Router transaction");
     }
 
-    // Extract and validate target address
+    // Extract target address and approvalTarget
     const targetAddress = extractTargetFromRainbowData(trade.data);
+    const approvalTarget = decoded.args[3] as string;
 
-    // Skip validation for zero address (native ETH)
+    // Validate target contract exists
     const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
     if (targetAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
       const targetCode = await hre.ethers.provider.getCode(targetAddress);
@@ -362,8 +347,43 @@ async function testRouter(
       }
     }
 
+    // ============================================================================
+    // PERMIT2 VERIFICATION
+    // ============================================================================
+    let usingPermit2 = false;
+    const functionName = decoded.name;
+
+    // Check 1: Is the function using Permit2?
+    if (functionName === "fillQuoteTokenToTokenWithPermit") {
+      usingPermit2 = true;
+    }
+
+    // Check 2: Verify we actually generated a Permit2 signature
+    let permit2Warning = "";
+    if (params.usePermit2 && !inToken.isNative) {
+      if (!permit2SignatureGenerated) {
+        permit2Warning = "Expected Permit2 signature but none was generated";
+      } else if (!usingPermit2) {
+        permit2Warning = `Expected fillQuoteTokenToTokenWithPermit but got ${functionName}`;
+      }
+    }
+
+    // Log Permit2 status
+    if (usingPermit2) {
+      console.log(`      ✅ USING PERMIT2`);
+      console.log(`         - Function: ${functionName}`);
+      console.log(`         - Signature generated: ${permit2SignatureGenerated}`);
+      console.log(`         - Approval target: Permit2 (${PERMIT2_ADDRESS})`);
+    } else if (permit2Warning) {
+      console.log(`      ⚠️  PERMIT2 WARNING: ${permit2Warning}`);
+      console.log(`      ⚠️  Falling back to legacy approve`);
+      console.log(`         - Function: ${functionName}`);
+    } else {
+      console.log(`      ℹ️  Using legacy approve (expected for this token)`);
+      console.log(`         - Function: ${functionName}`);
+    }
+
     // Handle token approvals for ERC20 input tokens
-    // Client responsibility: Check allowance to Permit2 (or Rainbow Router) and approve if needed
     if (!inToken.isNative) {
       const tokenContract = scenario.inToken === "WETH"
         ? WETH
@@ -371,30 +391,29 @@ async function testRouter(
         ? USDC
         : IERC20__factory.connect(inToken.address, testSigner);
 
-      // Determine approval target based on quote response approvals
-      let approvalTarget = CONFIG.rainbowRouterAddress;
-      let approvalTargetName = "Rainbow Router";
+      // Determine approval target based on what function is actually being used
+      let approvalTargetAddress: string;
+      let approvalTargetName: string;
 
-      // Check if backend returned Permit2 approval in QUOTE response
-      // Look specifically for Permit2 approval (not DEX aggregator approval)
-      if (quoteResponse.approvals && quoteResponse.approvals.length > 0) {
-        const permit2Approval = quoteResponse.approvals.find(
-          (approval: any) =>
-            approval.address?.toLowerCase() === inToken.address.toLowerCase() &&
-            approval.approvee?.toLowerCase() === PERMIT2_ADDRESS.toLowerCase()
-        );
-
-        if (permit2Approval) {
-          approvalTarget = PERMIT2_ADDRESS;
-          approvalTargetName = "Permit2";
-        }
+      if (usingPermit2) {
+        // Using Permit2 - approve Permit2 contract
+        approvalTargetAddress = PERMIT2_ADDRESS;
+        approvalTargetName = "Permit2";
+      } else if (permit2Warning) {
+        // Expected Permit2 but falling back - approve Rainbow Router
+        approvalTargetAddress = CONFIG.rainbowRouterAddress;
+        approvalTargetName = "Rainbow Router (fallback)";
+      } else {
+        // Legacy approve (expected) - approve Rainbow Router
+        approvalTargetAddress = CONFIG.rainbowRouterAddress;
+        approvalTargetName = "Rainbow Router";
       }
 
-      console.log(`      [${router}] Handling ${inToken.symbol} approval to ${approvalTargetName}...`);
+      console.log(`      Approving ${approvalTargetName}...`);
       await handleERC20Approval(
         testSigner,
         tokenContract,
-        approvalTarget,
+        approvalTargetAddress,
         inputAmount,
         inToken.symbol,
         inToken.decimals
@@ -402,8 +421,6 @@ async function testRouter(
     }
 
     // Setup: Whitelist target and signers
-    console.log(`      [${router}] Whitelisting addresses...`);
-    const whitelistStart = Date.now();
     const authSigner = mainnet ? testSigner : contractOwner;
     await ensureTargetIsWhitelisted(authSigner, Rainbow, targetAddress);
 
@@ -418,30 +435,24 @@ async function testRouter(
       Rainbow,
       BACKEND_WARRANT_SIGNER,
     );
-    const whitelistEnd = Date.now();
-    console.log(`      [${router}] Whitelisting complete in ${whitelistEnd - whitelistStart}ms`);
 
     // Pre-simulate transaction
-    console.log(`      [${router}] Simulating transaction...`);
-    const simStart = Date.now();
-    const modifiedTrade = trade;
     let gasEstimate: bigint | undefined;
 
     try {
       gasEstimate = await hre.ethers.provider.estimateGas({
-        to: modifiedTrade.to,
-        data: modifiedTrade.data,
-        value: modifiedTrade.value,
+        to: trade.to,
+        data: trade.data,
+        value: trade.value,
         from: testAddress,
       });
-      const simEnd = Date.now();
-      console.log(`      [${router}] Simulation complete in ${simEnd - simStart}ms`);
     } catch (simError: any) {
-      const simEnd = Date.now();
-      console.log(`      [${router}] Simulation failed in ${simEnd - simStart}ms`);
       console.log(`      ❌ Simulation failed: ${simError.message}`);
-      console.log(`         📊 Tenderly: To=${modifiedTrade.to}, From=${testAddress}, Value=${modifiedTrade.value}`);
-      console.log(`         📊 Tenderly Data: ${modifiedTrade.data}`);
+      console.log(`         📊 Tenderly Debug:`);
+      console.log(`         To: ${trade.to}`);
+      console.log(`         From: ${testAddress}`);
+      console.log(`         Value: ${trade.value}`);
+      console.log(`         Data: ${trade.data}`);
 
       if (CONFIG.simulateOnly) {
         throw new Error(`Simulation failed: ${simError.message}`);
@@ -450,10 +461,16 @@ async function testRouter(
 
     // Execute transaction (if not simulation only)
     if (CONFIG.simulateOnly) {
+      console.log(`      ✅ SWAP SUCCESSFUL (simulated)`);
+      console.log(`         Gas estimate: ${gasEstimate?.toString()}`);
+      console.log(`         Expected output: ${quoteResponse.outAmount} ${quoteResponse.outToken.symbol}`);
+
       return {
         router,
         scenario: scenario.name,
         success: true,
+        warning: permit2Warning || undefined,
+        usingPermit2,
         gasUsed: gasEstimate?.toString(),
         txHash: "SIMULATED",
         tokenReceived: {
@@ -466,7 +483,7 @@ async function testRouter(
     } else {
       const executionResult = await executeRainbowTransaction(
         testSigner,
-        modifiedTrade,
+        trade,
         rainbowExecution,
         quoteResponse,
         CONFIG.rainbowRouterAddress,
@@ -474,17 +491,24 @@ async function testRouter(
 
       const balanceChanges = await reportBalanceChanges(
         testSigner,
-        WETH, // Using WETH as both contracts (will handle properly)
+        WETH,
         WETH,
         initialInTokenBalance,
         initialOutTokenBalance,
         quoteResponse,
       );
 
+      console.log(`      ✅ SWAP SUCCESSFUL (executed)`);
+      console.log(`         TX: ${executionResult.txHash}`);
+      console.log(`         Gas used: ${executionResult.gasUsed}`);
+      console.log(`         Received: ${balanceChanges.wethReceived} ${outToken.symbol}`);
+
       return {
         router,
         scenario: scenario.name,
         success: true,
+        warning: permit2Warning || undefined,
+        usingPermit2,
         gasUsed: executionResult.gasUsed,
         txHash: executionResult.txHash,
         tokenReceived: {
@@ -512,13 +536,26 @@ function printTestSummary(results: RouterTestResult[]) {
 
   const successful = results.filter((r) => r.success);
   const failed = results.filter((r) => !r.success);
+  const withWarnings = results.filter((r) => r.success && r.warning);
+  const usingPermit2 = results.filter((r) => r.success && r.usingPermit2);
 
   console.log(`\n✅ Success: ${successful.length}/${results.length}`);
   console.log(`❌ Failed: ${failed.length}/${results.length}`);
+  if (withWarnings.length > 0) {
+    console.log(`⚠️  Warnings: ${withWarnings.length}/${results.length}`);
+  }
 
-  if (successful.length > 0) {
-    console.log(`\n✓ Successful Tests:`);
-    successful.forEach(r => console.log(`  - ${r.router} - ${r.scenario}`));
+  if (usingPermit2.length > 0) {
+    console.log(`\n🎉 Using Permit2:`);
+    usingPermit2.forEach(r => console.log(`  - ${r.router} - ${r.scenario}`));
+  }
+
+  if (successful.length > 0 && usingPermit2.length < successful.length) {
+    console.log(`\n✓ Successful Tests (Legacy Approve):`);
+    successful.filter(r => !r.usingPermit2).forEach(r => {
+      const warningText = r.warning ? ` (⚠️  ${r.warning})` : '';
+      console.log(`  - ${r.router} - ${r.scenario}${warningText}`);
+    });
   }
 
   if (failed.length > 0) {

@@ -671,8 +671,18 @@ export const getRainbowExecution = async (
     console.log(`      [DEBUG] Full execution request:`, JSON.stringify({
         hasCoupon: !!coupon,
         useOkuRouter: true,
-        hasSigningRequest: !!signingRequest
-    }))
+        hasSigningRequest: !!signingRequest,
+        couponHasPermit2: !!(coupon as any).raw?.quote?.permit2,
+        couponHasOriginalDex: !!(coupon as any).raw?.quote?.originalDexTarget,
+        storedDexTarget: (coupon as any).raw?.quote?.originalDexTarget || 'NOT_STORED'
+    }));
+
+    // Log what was actually stored as "original DEX"
+    if ((coupon as any).raw?.quote?.originalDexTarget) {
+        console.log(`      [DEBUG] Stored originalDexTarget: ${(coupon as any).raw.quote.originalDexTarget}`);
+        console.log(`      [DEBUG] Expected Enso: 0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf`);
+        console.log(`      [DEBUG] Is it Rainbow Router?: ${(coupon as any).raw.quote.originalDexTarget === '0xA90845CFc60488cCB917169EeDCF3577092Df29f'}`);
+    }
 
     try {
         const response = await axios.post(url, requestBody);
