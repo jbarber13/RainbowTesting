@@ -650,58 +650,15 @@ export const getRainbowExecution = async (
 ): Promise<RainbowExecutionInfo> => {
     const url = baseUrl || `http://localhost:3333/market/${market}/execution_information`;
 
-    // Minimal request body - Rainbow transformation already happened at quote time
     const requestBody: ExecutionRequest = {
         coupon: coupon,
         useOkuRouter: true,
-        signingRequest: signingRequest // Full signing request with payload + signature
+        signingRequest: signingRequest
     };
-
-    // Debug: Log what we're sending to execution endpoint
-    if (signingRequest) {
-        console.log(`      [DEBUG] Sending signingRequest to execution endpoint:`, {
-            hasTypedData: !!signingRequest.typedData,
-            hasSignature: !!(signingRequest.typedData?.[0]?.signature),
-            signaturePreview: signingRequest.typedData?.[0]?.signature?.substring(0, 20) + '...'
-        });
-    } else {
-        console.log(`      [DEBUG] No signingRequest being sent to execution endpoint`);
-    }
-
-    console.log(`      [DEBUG] Full execution request:`, JSON.stringify({
-        hasCoupon: !!coupon,
-        useOkuRouter: true,
-        hasSigningRequest: !!signingRequest,
-        couponHasPermit2: !!(coupon as any).raw?.quote?.permit2,
-        couponHasOriginalDex: !!(coupon as any).raw?.quote?.originalDexTarget,
-        storedDexTarget: (coupon as any).raw?.quote?.originalDexTarget || 'NOT_STORED'
-    }));
-
-    // Log what was actually stored as "original DEX"
-    if ((coupon as any).raw?.quote?.originalDexTarget) {
-        console.log(`      [DEBUG] Stored originalDexTarget: ${(coupon as any).raw.quote.originalDexTarget}`);
-        console.log(`      [DEBUG] Expected Enso: 0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf`);
-        console.log(`      [DEBUG] Is it Rainbow Router?: ${(coupon as any).raw.quote.originalDexTarget === '0xA90845CFc60488cCB917169EeDCF3577092Df29f'}`);
-    }
 
     try {
         const response = await axios.post(url, requestBody);
-        // Response is now ExecutionInformation directly (not wrapped in ExecutionInformationWithWarrant)
-        // Warrant is embedded in the trade.data calldata, not returned separately
         const executionInfo = response.data as RainbowExecutionInfo;
-
-        // Debug: Log the function being called
-        const trade = executionInfo.trade;
-        if (trade?.data) {
-            try {
-                const rainbowInterface = RainbowRouter__factory.createInterface();
-                const decoded = rainbowInterface.parseTransaction({ data: trade.data });
-                console.log(`      [DEBUG] Rainbow Router function: ${decoded?.name || 'UNKNOWN'}`);
-            } catch (e) {
-                console.log(`      [DEBUG] Could not decode Rainbow Router function`);
-            }
-        }
-
         return executionInfo;
     } catch (error: any) {
         console.error(`❌ Error fetching ${market} Rainbow execution info:`);
@@ -825,7 +782,18 @@ export const handleERC20Approval = async (
 };
 
 // Transaction execution and analysis
+export interface ExtractedTargets {
+    target: string;
+    approvalTarget: string | null;
+    functionName: string;
+}
+
 export const extractTargetFromRainbowData = (txData: string): string => {
+    const targets = extractTargetsFromRainbowData(txData);
+    return targets.target;
+};
+
+export const extractTargetsFromRainbowData = (txData: string): ExtractedTargets => {
     try {
         const rainbowInterface = RainbowRouter__factory.createInterface();
         const decoded = rainbowInterface.parseTransaction({ data: txData });
@@ -839,25 +807,27 @@ export const extractTargetFromRainbowData = (txData: string): string => {
             decoded.name === "fillQuoteTokenToTokenWithPermit") {
             // For token-to-token functions, target is the 3rd parameter (index 2), approvalTarget is 4th (index 3)
             const target = decoded.args[2] as string;
+            const approvalTarget = decoded.args[3] as string;
             if (!target || target === "0x0000000000000000000000000000000000000000") {
                 throw new Error(`Invalid target address extracted: ${target}`);
             }
-            return target;
+            return { target, approvalTarget, functionName: decoded.name };
         } else if (decoded.name === "fillQuoteEthToToken") {
             // ETH->Token: target is the 2nd parameter (index 1), NO approvalTarget (ETH doesn't require approval)
             const target = decoded.args[1] as string;
             if (!target || target === "0x0000000000000000000000000000000000000000") {
                 throw new Error(`Invalid target address extracted: ${target}`);
             }
-            return target;
+            return { target, approvalTarget: null, functionName: decoded.name };
         } else if (decoded.name === "fillQuoteTokenToEth" ||
                    decoded.name === "fillQuoteTokenToEthWithPermit") {
             // Token->ETH: target is the 2nd parameter (index 1), approvalTarget is 3rd (index 2)
             const target = decoded.args[1] as string;
+            const approvalTarget = decoded.args[2] as string;
             if (!target || target === "0x0000000000000000000000000000000000000000") {
                 throw new Error(`Invalid target address extracted: ${target}`);
             }
-            return target;
+            return { target, approvalTarget, functionName: decoded.name };
         }
 
         throw new Error(`Unsupported function: ${decoded.name}`);
