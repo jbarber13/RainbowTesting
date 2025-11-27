@@ -47,7 +47,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "base",
         chainId: 8453,
         chainName: "base",
-        rainbowRouterAddress: "0xA89A26c4d81A2cca4d0670F77f0FC88362b72248",
+        rainbowRouterAddress: "0x816cd361284003e722dbcc3597ca6e3bdb4d46dd",
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
         nativeSymbol: "ETH",
@@ -71,7 +71,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "worldchain",
         chainId: 480,
         chainName: "worldchain",
-        rainbowRouterAddress: "0x25cf2128F603754179379351B805B4F8C0B8dCA4",
+        rainbowRouterAddress: "0x2b53aec27d45a0021c514cdfd6496f99a5e0be21",
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1", // Native USDC on World Chain
         nativeSymbol: "ETH",

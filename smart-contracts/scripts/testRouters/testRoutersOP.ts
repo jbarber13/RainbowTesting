@@ -21,9 +21,8 @@ import {
   reportBalanceChanges,
   BACKEND_WARRANT_SIGNER,
   TestSetup,
+  canoeParams,
 } from "../../util/canoeHelper";
-import { canoeParams } from "../../util/canoeHelper";
-import { Token } from "../canoeInterface";
 import { IERC20__factory, RainbowRouter__factory } from "../../typechain-types";
 
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
@@ -56,18 +55,22 @@ const CONFIG = {
   },
 
   routers: [
-    // Transfer proxy routers
+    "enso",
+    "icecreamswap",
+    "kyberswap",
+    "odos",
     "okx",
+    // "oneinch", // Excluded: API rate limits (429) on free tier
+    "paraswap",
+    "unizen",
     "zeroex",
-    // Standard routers (confirmed working)
-    // "enso",
-    // "icecreamswap",
-    // "odos",
-    // "oneinch",
-    // "paraswap",
-    // "kyberswap",
-    // "unizen",
   ],
+
+  // Router/pair combinations to skip (router → [inToken-outToken, ...])
+  skipPairs: {
+    // icecreamswap doesn't support routing to native ETH (only WETH)
+    icecreamswap: ["USDC-ETH"],
+  } as Record<string, string[]>,
 
   trades: [
     {
@@ -130,6 +133,13 @@ async function main() {
     console.log(`\n📋 Testing ${trade.name} (${CONFIG.routers.length} routers)`);
 
     for (const router of CONFIG.routers) {
+      const pairKey = `${trade.inToken}-${trade.outToken}`;
+      const skipPairs = CONFIG.skipPairs[router] || [];
+      if (skipPairs.includes(pairKey)) {
+        console.log(`  ⏭️  ${router}: Skipped (unsupported pair)`);
+        continue;
+      }
+
       try {
         const setup = await setupTestEnvironment();
         const testAddress = await setup.testSigner.getAddress();
@@ -179,34 +189,20 @@ async function testRouter(
 
   const inToken = CONFIG.tokens[tradeConfig.inToken as keyof typeof CONFIG.tokens];
   const outToken = CONFIG.tokens[tradeConfig.outToken as keyof typeof CONFIG.tokens];
-
-  const originalInToken: Token = {
-    address: inToken.address,
-    decimals: inToken.decimals,
-    symbol: inToken.symbol,
-    chainId: CONFIG.chainId
-  };
-
-  const originalOutToken: Token = {
-    address: outToken.address,
-    decimals: outToken.decimals,
-    symbol: outToken.symbol,
-    chainId: CONFIG.chainId
-  };
-
   const inputAmount = parseUnits(tradeConfig.testAmount, inToken.decimals);
+
   const params: canoeParams = {
     chain: CONFIG.chain,
     account: CONFIG.rainbowRouterAddress,
     isExactIn: true,
-    inTokenAddress: originalInToken.address,
-    outTokenAddress: originalOutToken.address,
+    inTokenAddress: inToken.address,
+    outTokenAddress: outToken.address,
     inTokenAmount: tradeConfig.testAmount,
     slippage: CONFIG.slippage,
     useOkuRouter: true,
     getCalldata: true,
     usePermit2: !inToken.isNative,
-    userAddress: testAddress
+    userAddress: testAddress,
   };
 
   const inTokenContract = inToken.isNative ? null :
@@ -282,14 +278,8 @@ async function testRouter(
       throw new Error("Failed to decode transaction");
     }
 
-    const extractedTargets = extractTargetsFromRainbowData(trade.data);
-    const { target: targetAddress, approvalTarget: approvalTargetAddress } = extractedTargets;
+    const { target: targetAddress, approvalTarget: approvalTargetAddress } = extractTargetsFromRainbowData(trade.data);
     const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-    console.log(`      📍 Target: ${targetAddress}`);
-    if (approvalTargetAddress && approvalTargetAddress.toLowerCase() !== targetAddress.toLowerCase()) {
-      console.log(`      📍 ApprovalTarget: ${approvalTargetAddress}`);
-    }
 
     if (targetAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
       const targetCode = await hre.ethers.provider.getCode(targetAddress);
@@ -305,12 +295,8 @@ async function testRouter(
     if (params.usePermit2 && !inToken.isNative) {
       if (!permit2SignatureGenerated) {
         permit2Warning = "Expected Permit2 signature but none was generated";
-        console.log(`      ⚠️  ${permit2Warning}`);
       } else if (!usingPermit2) {
         permit2Warning = `Expected Permit2 function but got ${functionName}`;
-        console.log(`      ⚠️  ${permit2Warning}`);
-      } else {
-        console.log(`      ✅ Using Permit2`);
       }
     }
 
@@ -331,14 +317,12 @@ async function testRouter(
 
     const authSigner = mainnet ? testSigner : contractOwner;
 
-    // Whitelist the target address
     await ensureTargetIsWhitelisted(authSigner, Rainbow, targetAddress);
 
-    // Also whitelist the approvalTarget if it's different from target (for transfer proxy dexes)
+    // Whitelist approvalTarget for transfer proxy dexes (e.g., OKX, ZeroEx)
     if (approvalTargetAddress &&
         approvalTargetAddress.toLowerCase() !== targetAddress.toLowerCase() &&
         approvalTargetAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
-      console.log(`      🔄 Also whitelisting approvalTarget (transfer proxy): ${approvalTargetAddress}`);
       await ensureTargetIsWhitelisted(authSigner, Rainbow, approvalTargetAddress);
     }
 
@@ -359,36 +343,6 @@ async function testRouter(
       });
     } catch (simError: any) {
       if (CONFIG.simulateOnly) {
-        console.log(`      ❌ Simulation error details:`);
-        console.log(`         Target: ${targetAddress}`);
-        console.log(`         ApprovalTarget: ${approvalTargetAddress || "N/A"}`);
-        console.log(`         Function: ${functionName}`);
-        console.log(`         Error: ${simError.message}`);
-
-        // Check whitelist status
-        const targetWhitelisted = await Rainbow.swapTargets(targetAddress);
-        console.log(`         Target whitelisted: ${targetWhitelisted}`);
-        if (approvalTargetAddress && approvalTargetAddress !== targetAddress) {
-          const approvalTargetWhitelisted = await Rainbow.swapTargets(approvalTargetAddress);
-          console.log(`         ApprovalTarget whitelisted: ${approvalTargetWhitelisted}`);
-        }
-
-        // Try to decode the revert reason if available
-        if (simError.data) {
-          console.log(`         Revert data: ${simError.data}`);
-        }
-
-        // Print full decoded transaction for debugging
-        console.log(`         Full decoded args:`);
-        for (let i = 0; i < decoded.args.length; i++) {
-          const arg = decoded.args[i];
-          if (typeof arg === 'object' && arg !== null) {
-            console.log(`           [${i}]: ${JSON.stringify(arg, (_, v) => typeof v === 'bigint' ? v.toString() : v)}`);
-          } else {
-            console.log(`           [${i}]: ${arg}`);
-          }
-        }
-
         throw new Error(`Simulation failed: ${simError.message}`);
       }
     }
