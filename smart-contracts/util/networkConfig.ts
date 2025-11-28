@@ -11,6 +11,7 @@ export interface NetworkConfig {
     chainId: number;
     chainName: string; // Backend chain name (e.g., "optimism", "base", "worldchain")
     rainbowRouterAddress: string;
+    deploymentBlock: number; // Block number when the contract was deployed
     wethAddress: string;
     usdcAddress?: string; // Optional - some networks may not have USDC
     nativeSymbol: string; // "ETH" for most networks
@@ -26,6 +27,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         chainId: 10,
         chainName: "optimism",
         rainbowRouterAddress: "0xA90845CFc60488cCB917169EeDCF3577092Df29f",  // NEW DEPLOYMENT with approvalTarget support
+        deploymentBlock: 143955053, // Nov 18, 2025 - tx: 0x6c495af96a3af0848131a132951d635419a9558b30a391bdb7094575fd5413c5
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
         nativeSymbol: "ETH",
@@ -48,6 +50,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         chainId: 8453,
         chainName: "base",
         rainbowRouterAddress: "0x816cd361284003e722dbcc3597ca6e3bdb4d46dd",
+        deploymentBlock: 38624971,
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
         nativeSymbol: "ETH",
@@ -72,6 +75,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         chainId: 480,
         chainName: "worldchain",
         rainbowRouterAddress: "0x2b53aec27d45a0021c514cdfd6496f99a5e0be21",
+        deploymentBlock: 22351271,
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1", // Native USDC on World Chain
         nativeSymbol: "ETH",
