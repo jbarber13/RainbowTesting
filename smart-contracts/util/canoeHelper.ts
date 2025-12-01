@@ -686,14 +686,9 @@ export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: Ra
         return;
     }
 
-    console.log("❌ Target not whitelisted. Adding to whitelist...");
-
     try {
         const tx = await Rainbow.connect(ownerSigner).updateSwapTargets(targetAddress, true);
         await tx.wait();
-
-        console.log("✅ Target successfully whitelisted!");
-        console.log(`Transaction hash: ${tx.hash}`);
 
         const nowWhitelisted = await Rainbow.swapTargets(targetAddress);
         if (!nowWhitelisted) {
@@ -706,22 +701,16 @@ export const ensureTargetIsWhitelisted = async (ownerSigner: Signer, Rainbow: Ra
 };
 
 export const ensureSignerIsWhitelisted = async (ownerSigner: Signer, Rainbow: RainbowRouter, signerAddress: string) => {
-    
     const isWhitelisted = await Rainbow.validSigners(signerAddress);
-    
+
     if (isWhitelisted) {
         return;
     }
-    
-    console.log("❌ Signer not whitelisted. Adding to whitelist...");
-    
+
     try {
         const tx = await Rainbow.connect(ownerSigner).updateValidSigner(signerAddress, true);
         await tx.wait();
-        
-        console.log("✅ Signer successfully whitelisted!");
-        console.log(`Transaction hash: ${tx.hash}`);
-        
+
         const nowWhitelisted = await Rainbow.validSigners(signerAddress);
         if (!nowWhitelisted) {
             throw new Error("Signer whitelisting verification failed");
@@ -741,38 +730,23 @@ export const handleERC20Approval = async (
     tokenDecimals: number = 18
 ) => {
     const signerAddress = await signer.getAddress();
-    const tokenAddress = await token.getAddress();
-
-    console.log(`  Token to approve: ${tokenSymbol} (${tokenAddress})`);
-    console.log(`  Amount to approve: ${formatUnits(amount, tokenDecimals)} ${tokenSymbol}`);
-    console.log(`  Spender: ${spenderAddress}`);
-    console.log(`  Owner: ${signerAddress}`);
 
     const currentAllowance = await token.allowance(signerAddress, spenderAddress);
-    console.log(`  Current allowance: ${formatUnits(currentAllowance, tokenDecimals)} ${tokenSymbol}`);
 
     if (currentAllowance >= BigInt(amount.toString())) {
-        console.log(`✅ Sufficient allowance already exists`);
         return;
     }
 
-    console.log(`❌ Insufficient allowance. Approving tokens...`);
-
     try {
         const approveTx = await token.connect(signer).approve(spenderAddress, amount);
-        console.log(`📤 Approval transaction sent: ${approveTx.hash}`);
-
-        const receipt = await approveTx.wait();
-        console.log(`✅ Approval transaction confirmed in block ${receipt!.blockNumber}`);
+        await approveTx.wait();
 
         // Add small delay to ensure state propagation on mainnet
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         const newAllowance = await token.allowance(signerAddress, spenderAddress);
-        console.log(`✅ New allowance: ${formatUnits(newAllowance, tokenDecimals)} ${tokenSymbol}`);
 
         if (newAllowance < BigInt(amount.toString())) {
-            console.error(`  ⚠️  Allowance check failed. Transaction: https://optimistic.etherscan.io/tx/${approveTx.hash}`);
             throw new Error(`Approval failed: expected ${formatUnits(amount, tokenDecimals)}, got ${formatUnits(newAllowance, tokenDecimals)}`);
         }
     } catch (error: any) {

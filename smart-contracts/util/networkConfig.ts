@@ -86,6 +86,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xef58b643240178c2bc37681f8d4e50d7ec37ee22", name: "TransparentUpgradeableProxy", protocol: "unizen" },
             { address: "0xf75584ef6673ad213a685a1b58cc0330b8ea22cf", name: "EnsoRouter", protocol: "enso" },
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
+            { address: "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
         rpcUrl: process.env.OP_URL
@@ -159,8 +160,8 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "bsc",
         chainId: 56,
         chainName: "bsc",
-        rainbowRouterAddress: "", // To be deployed
-        deploymentBlock: 0,
+        rainbowRouterAddress: "0x31750d38d8d1f69af94407002b9322f5765d869a", 
+        deploymentBlock: 70161721,
         wethAddress: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", // WBNB
         usdcAddress: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // BSC USDC
         nativeSymbol: "BNB",
@@ -178,9 +179,12 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x0000000000001fF3684f28c67538d4D072C22734", name: "AllowanceHolder", protocol: "0x" },
             { address: "0x111111125421ca6dc452d289314280a0f8842a65", name: "AggregationRouterV6", protocol: "oneinch" },
             { address: "0x89b8AA89FDd0507a99d334CBe3C808fAFC7d850E", name: "OdosRouterV2", protocol: "odos" },
+            { address: "0x0D05a7D3448512B78fa8A9e46c4872C88C4a0D05", name: "OdosRouterV3", protocol: "odos" },
             { address: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", name: "MetaAggregationRouterV2", protocol: "kyberswap" },
             { address: "0x6a000f20005980200259b80c5102003040001068", name: "AugustusV6.2", protocol: "paraswap" },
+            { address: "0xd547Eafde2410e63300Fc5308CceA0b356E7b5d8", name: "OKXDexRouter", protocol: "okx" },
             { address: "0xB403c6c93446eD1453CAa51d69A492053e008240", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
+            { address: "0x1a3304cBef66de00FbE1548CC4C6585aD22FbCFf", name: "IceCreamSwapAggregator", protocol: "icecreamswap" },
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",

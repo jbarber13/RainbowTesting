@@ -1,12 +1,10 @@
 /**
  * listSwapTargets.ts
  *
- * Queries a RainbowRouter deployment for SwapTargetAdded events
- * and prints all swap targets that have been added.
+ * Queries a RainbowRouter deployment for SwapTargetAdded and SwapTargetRemoved events
+ * and prints the current swap targets as well as any that were removed.
  *
  * Usage: npx hardhat run scripts/listSwapTargets.ts --network op
- *
- * Optional: Set CHECK_REMOVED=true to also query SwapTargetRemoved events
  */
 
 import hre from "hardhat";
@@ -15,9 +13,8 @@ import { getNetworkConfig } from "../util/networkConfig";
 import { TypedEventLog } from "../typechain-types/common";
 import { SwapTargetAddedEvent, SwapTargetRemovedEvent } from "../typechain-types/contracts/RainbowRouter";
 
-const BLOCK_CHUNK_SIZE = 500; // Some RPCs limit to 500 blocks max
-const DELAY_MS = 300; // Delay between chunks to avoid rate limiting
-const CHECK_REMOVED = false; // Set to true to also check SwapTargetRemoved events
+const BLOCK_CHUNK_SIZE = 10000; // Max 10000 blocks on free tier
+const DELAY_MS = 1000; // Delay between chunks to avoid rate limiting
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -51,14 +48,16 @@ async function queryEventsInChunks<T extends TypedEventLog<any>>(
         break; // Success - exit retry loop
       } catch (error: any) {
         retries++;
-        const isRateLimit = error.message.includes('timeout') ||
+        const isRetryable = error.message.includes('timeout') ||
                            error.message.includes('rate') ||
                            error.message.includes('Too Many') ||
-                           error.message.includes('429');
+                           error.message.includes('429') ||
+                           error.message.includes('GRPC') ||
+                           error.message.includes('cancellation');
 
-        if (isRateLimit && retries < maxRetries) {
+        if (isRetryable && retries < maxRetries) {
           const waitTime = Math.pow(2, retries) * 1000; // Exponential backoff: 2s, 4s, 8s, 16s
-          console.log(`  Rate limited, waiting ${waitTime/1000}s (retry ${retries}/${maxRetries})...`);
+          console.log(`  Error (${error.message.slice(0, 30)}...), waiting ${waitTime/1000}s (retry ${retries}/${maxRetries})...`);
           await sleep(waitTime);
         } else {
           throw error;
@@ -106,37 +105,50 @@ async function main() {
     endBlock
   );
 
-  // Build set of targets
-  const targets = new Set<string>();
+  // Query SwapTargetRemoved events
+  console.log(`\nQuerying SwapTargetRemoved events...`);
+  const removedEvents = await queryEventsInChunks<TypedEventLog<SwapTargetRemovedEvent.Event>>(
+    Rainbow,
+    Rainbow.filters.SwapTargetRemoved(),
+    startBlock,
+    endBlock
+  );
 
+  // Build set of all targets that were ever added
+  const allAdded = new Set<string>();
   for (const event of addedEvents) {
-    targets.add(event.args.target.toLowerCase());
+    allAdded.add(event.args.target.toLowerCase());
   }
 
-  // Optionally check for removed targets
-  let removedCount = 0;
-  if (CHECK_REMOVED) {
-    console.log(`\nQuerying SwapTargetRemoved events...`);
-    const removedEvents = await queryEventsInChunks<TypedEventLog<SwapTargetRemovedEvent.Event>>(
-      Rainbow,
-      Rainbow.filters.SwapTargetRemoved(),
-      startBlock,
-      latestBlock
-    );
+  // Build set of removed targets
+  const removed = new Set<string>();
+  for (const event of removedEvents) {
+    removed.add(event.args.target.toLowerCase());
+  }
 
-    for (const event of removedEvents) {
-      targets.delete(event.args.target.toLowerCase());
+  // Current targets = added - removed
+  const current = new Set<string>();
+  for (const target of allAdded) {
+    if (!removed.has(target)) {
+      current.add(target);
     }
-    removedCount = removedEvents.length;
   }
 
-  // Print results
-  console.log(`\nSwap Targets (${targets.size}):`);
-  for (const target of [...targets].sort()) {
+  // Print current targets
+  console.log(`\n✅ Current Swap Targets (${current.size}):`);
+  for (const target of [...current].sort()) {
     console.log(`  ${target}`);
   }
 
-  console.log(`\nTotal events: ${addedEvents.length} added${CHECK_REMOVED ? `, ${removedCount} removed` : ''}`);
+  // Print removed targets
+  if (removed.size > 0) {
+    console.log(`\n❌ Removed Swap Targets (${removed.size}):`);
+    for (const target of [...removed].sort()) {
+      console.log(`  ${target}`);
+    }
+  }
+
+  console.log(`\nTotal events: ${addedEvents.length} added, ${removedEvents.length} removed`);
 }
 
 main().catch(console.error);

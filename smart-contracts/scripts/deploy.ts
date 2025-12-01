@@ -22,6 +22,7 @@ async function main() {
 
   console.log("STARTING")
   let networkName = hre.network.name
+  let testNetwork = 'bsc'
   let mainnet = true
   let signer: Signer
 
@@ -35,20 +36,34 @@ async function main() {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.OP_URL!
+            jsonRpcUrl: process.env.BSC_URL!
           },
         },
       ],
     });
-    console.log("Reset")
+    const blockNumber = await ethers.provider.getBlockNumber()
+    console.log("Reset to block:", blockNumber)
+    networkName = testNetwork
 
-    signer = await ethers.getSigner(userAddr)
-    await setBalance(userAddr, ethers.parseEther("1000"))
-
+    // Impersonate first, then get signer
     await network.provider.request({
       method: "hardhat_impersonateAccount",
       params: [userAddr],
     });
+
+    signer = await ethers.getSigner(userAddr)
+
+    // Debug: check balance right after getting signer
+    console.log("Account:", userAddr)
+    const balance = await ethers.provider.getBalance(userAddr)
+    console.log("Balance at fork:", ethers.formatEther(balance), "BNB")
+
+    // If balance is insufficient for testing, top up (local fork only)
+    if (balance < ethers.parseEther("0.01")) {
+      console.log("Insufficient balance for deployment test, topping up...")
+      await setBalance(userAddr, ethers.parseEther("1"))
+      console.log("New balance:", ethers.formatEther(await ethers.provider.getBalance(userAddr)), "BNB")
+    }
 
   } else {
     [signer] = await ethers.getSigners()
@@ -80,8 +95,8 @@ async function main() {
   if (mainnet) {
     await sleep(5000)
   }
-  const tx = await contract.deploymentTransaction()
-  console.log("DEPLOYED: ", await contract.getAddress(), tx?.hash)
+  const contractAddress = await contract.getAddress()
+  console.log("DEPLOYED: ", contractAddress)
 
 
   // Get network config for swap targets
