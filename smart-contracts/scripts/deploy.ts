@@ -3,6 +3,7 @@ import { Signer } from "ethers";
 import { RainbowRouter__factory } from "../typechain-types"
 import hre, { network } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { getNetworkConfig } from "../util/networkConfig";
 
 const { ethers } = require("hardhat");
 
@@ -16,44 +17,6 @@ const gfxOwner = "0x00a0bB9dfD2db3a6E447147426aB2D1B5Ac356d5"
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Router addresses by chain ID
-const ROUTERS_BY_CHAIN: Record<number, string[]> = {
-  // Optimism (10)
-  10: [
-    "0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf", // Enso
-    "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", // IceCreamSwap
-    "0xca423977156bb05b13a2ba3b76bc5419e2fe9680", // Odos
-    "0x111111125421ca6dc452d289314280a0f8842a65", // 1inch
-    "0x6A000F20005980200259B80c5102003040001068", // ParaSwap
-    "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", // KyberSwap
-    "0xad1D43efCF92133A9a0f33e5936F5ca10f2b012E", // Unizen
-    "0xC44C6550a3B13116F6fD593e1ec963d5aE78C4C8", // OKX Router
-    "0x68D6B739D2020067D1e2F713b999dA97E4d54812", // OKX Approval Target
-    "0xDEF1ABE32c034e558Cdd535791643C58a13aCC10", // 0x Exchange Proxy (execution)
-    "0x0000000000001fF3684f28c67538d4D072C22734", // 0x AllowanceHolder (approvals)
-  ],
-  // Worldchain (480)
-  480: [
-    "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", // icecreamswap
-    "0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf", // enso
-    "0x8ac7bee993bb44dab564ea4bc9ea67bf9eb5e743", // lusor
-  ],
-  // Base (8453)
-  8453: [
-    "0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf", // Enso
-    "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", // Icecreamswap
-    "0x5e2F47bD7D4B357fCfd0Bb224Eb665773B1B9801", // Oks
-    "0x19cEeAd7105607Cd444F5ad10dd51356436095a1", // Odos
-    "0x111111125421cA6dc452d289314280a0f8842A65", // 1inch
-    "0x6352a56caadc4f1e25cd6c75970fa768a3304e64", // OpenOcean
-    "0x6A000F20005980200259B80c5102003040001068", // Velora
-    "0xef58B643240178c2BC37681f8d4E50d7Ec37Ee22", // Unison
-    "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD", // Luxor
-    "0x000000000022D473030F116dDEE9F6B43aC78BA3", // 0x (permit2)
-    "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", // Kyberswap
-  ]
 }
 async function main() {
 
@@ -121,30 +84,34 @@ async function main() {
   console.log("DEPLOYED: ", await contract.getAddress(), tx?.hash)
 
 
-  // Get current chain ID
-  const chainId = (await ethers.provider.getNetwork()).chainId
-  console.log("Chain ID: ", chainId)
+  // Get network config for swap targets
+  let config;
+  try {
+    config = getNetworkConfig(networkName);
+  } catch (e) {
+    console.log(`No network config found for ${networkName}, skipping swap target registration`)
+  }
 
-  // Register routers for this chain
-  const routers = ROUTERS_BY_CHAIN[Number(chainId)]
-  if (routers && routers.length > 0) {
-    console.log(`Registering ${routers.length} swap routers for chain ${chainId}...`)
-    for (let i = 0; i < routers.length; i++) {
-      const routerAddr = routers[i]
-      console.log(`  Adding router ${i + 1}/${routers.length}: ${routerAddr}`)
-      const updateTx = await contract.updateSwapTargets(routerAddr, true, {
-        gasLimit: 5000000
+  // Register swap targets from config
+  if (config && config.knownSwapTargets.length > 0) {
+    const targets = config.knownSwapTargets;
+    console.log(`\nRegistering ${targets.length} swap targets for ${config.chainName}...`)
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      console.log(`  Adding ${i + 1}/${targets.length}: ${target.name} (${target.protocol}) - ${target.address}`)
+      const updateTx = await contract.updateSwapTargets(target.address, true, {
+        gasLimit: 100000
       })
       await updateTx.wait()
 
       // Add delay between transactions to avoid overloading RPC (only for mainnet)
-      if (mainnet && i < routers.length - 1) {
-        await sleep(3000)
+      if (mainnet && i < targets.length - 1) {
+        await sleep(2000)
       }
     }
-    console.log("All swap targets updated successfully")
+    console.log("All swap targets registered successfully")
   } else {
-    console.log(`No routers configured for chain ${chainId}`)
+    console.log(`No swap targets configured for ${networkName}`)
   }
 
   // Approve zero address as valid signer
