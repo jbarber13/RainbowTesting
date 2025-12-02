@@ -104,7 +104,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             "kyberswap",
             "icecreamswap",
             "openocean",
-            "propellerswap",
+            // "propellerswap", // Not supported by backend on Base
             // "enso",
             // "odos",
             // "oneinch",

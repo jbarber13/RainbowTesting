@@ -71,6 +71,14 @@ const NETWORK_SKIP_PATTERNS: Record<string, Array<{ pattern: RegExp; reason: str
     { pattern: /swapping wrapped token to native is disabled/i, reason: "WETH→Native disabled (wrap/unwrap)" },
     { pattern: /request timeout on the free tier/i, reason: "Free tier rate limit" },
   ],
+  bsc: [
+    { pattern: /swapping between native and wrapped native is not allowed/i, reason: "Native/WETH swap not supported (kyberswap)" },
+    { pattern: /no routes found/i, reason: "No routes available" },
+  ],
+  base: [
+    { pattern: /swapping between native and wrapped native is not allowed/i, reason: "Native/WETH swap not supported (kyberswap)" },
+    { pattern: /no routes found/i, reason: "No routes available" },
+  ],
 };
 
 interface ParsedError {
@@ -180,7 +188,7 @@ function shouldSkipError(networkKey: string, error: ParsedError): { skip: boolea
 // Configuration constants
 const DELAY_BETWEEN_TESTS = 3000; // ms
 const SLIPPAGE = 1000; // 10%
-const AUTO_WHITELIST = false; // Set to true to automatically whitelist missing targets/signers
+const AUTO_WHITELIST = true; // Set to true to automatically whitelist missing targets/signers
 
 interface TokenConfig {
   address: string;
@@ -251,6 +259,12 @@ function getConfigKey(networkName: string): string {
   return networkMap[networkName] || networkName;
 }
 
+// USDC decimals vary by network (BSC uses 18, most others use 6)
+const USDC_DECIMALS: Record<string, number> = {
+  bsc: 18,
+  // Most networks use 6 decimals (default)
+};
+
 /**
  * Get token configuration based on token type
  */
@@ -273,7 +287,7 @@ function getTokenConfig(tokenType: string, config: NetworkConfig): TokenConfig {
     case "USDC":
       return {
         address: config.usdcAddress || "",
-        decimals: 6,
+        decimals: USDC_DECIMALS[config.networkName] || 6,
         symbol: "USDC",
         isNative: false,
       };
