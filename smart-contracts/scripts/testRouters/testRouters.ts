@@ -60,24 +60,27 @@ const TRADE_PHASES = [
 // Skip pairs per router (known limitations)
 const SKIP_PAIRS: Record<string, string[]> = {
   icecreamswap: ["USDC-NATIVE", "WETH-NATIVE"],  // Doesn't support output to native ETH
+  kyberswap: ["NATIVE-WETH", "WETH-NATIVE"],     // Doesn't support native <-> wrapped native swaps
 };
+
+// Global skip patterns (apply to all networks)
+const GLOBAL_SKIP_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /request limit.*exceeded/i, reason: "Rate limit exceeded" },
+  { pattern: /429.*1inch/i, reason: "1inch rate limit" },
+  { pattern: /no routes found/i, reason: "No routes available" },
+  { pattern: /timed out/i, reason: "Backend timeout" },
+];
 
 // Network-specific skip patterns (errors that are expected and should be skipped)
 // These patterns match against the detailed backend error message
 const NETWORK_SKIP_PATTERNS: Record<string, Array<{ pattern: RegExp; reason: string }>> = {
   op: [
     { pattern: /insufficient amount/i, reason: "Insufficient amount for this router" },
-    { pattern: /swapping between native and wrapped native is not allowed/i, reason: "Native/WETH swap not supported" },
     { pattern: /swapping wrapped token to native is disabled/i, reason: "WETH→Native disabled (wrap/unwrap)" },
     { pattern: /request timeout on the free tier/i, reason: "Free tier rate limit" },
   ],
-  bsc: [
-    { pattern: /swapping between native and wrapped native is not allowed/i, reason: "Native/WETH swap not supported (kyberswap)" },
-    { pattern: /no routes found/i, reason: "No routes available" },
-  ],
-  base: [
-    { pattern: /swapping between native and wrapped native is not allowed/i, reason: "Native/WETH swap not supported (kyberswap)" },
-    { pattern: /no routes found/i, reason: "No routes available" },
+  polygon: [
+    { pattern: /OpenOcean external call failed.*TRANSFER_FROM_FAILED/i, reason: "OpenOcean routing bug (routes through WETH without wrapping native POL)" },
   ],
 };
 
@@ -173,22 +176,32 @@ function parseError(error: any): ParsedError {
  * Check if an error should be skipped for a given network
  */
 function shouldSkipError(networkKey: string, error: ParsedError): { skip: boolean; reason?: string } {
-  const patterns = NETWORK_SKIP_PATTERNS[networkKey];
-  if (!patterns) return { skip: false };
-
   const errorText = error.backendError || error.message;
-  for (const { pattern, reason } of patterns) {
+
+  // Check global patterns first
+  for (const { pattern, reason } of GLOBAL_SKIP_PATTERNS) {
     if (pattern.test(errorText)) {
       return { skip: true, reason };
     }
   }
+
+  // Check network-specific patterns
+  const patterns = NETWORK_SKIP_PATTERNS[networkKey];
+  if (patterns) {
+    for (const { pattern, reason } of patterns) {
+      if (pattern.test(errorText)) {
+        return { skip: true, reason };
+      }
+    }
+  }
+
   return { skip: false };
 }
 
 // Configuration constants
 const DELAY_BETWEEN_TESTS = 3000; // ms
 const SLIPPAGE = 1000; // 10%
-const AUTO_WHITELIST = true; // Set to true to automatically whitelist missing targets/signers
+const AUTO_WHITELIST = false; // Set to true to automatically whitelist missing targets/signers
 
 interface TokenConfig {
   address: string;
@@ -465,6 +478,15 @@ async function testRouter(
           from: testAddress,
         });
       } catch (simError: any) {
+        // Output transaction details for Tenderly debugging
+        console.log(`\n    ⚠️  Direct WETH wrap/unwrap simulation failed - Tenderly debugging:`);
+        console.log(`    ────────────────────────────────────────────────────────`);
+        console.log(`    From: ${testAddress}`);
+        console.log(`    To: ${trade.to}`);
+        console.log(`    Value: ${trade.value} (${hre.ethers.formatEther(trade.value)} ETH)`);
+        console.log(`    Data: ${trade.data}`);
+        console.log(`    Error: ${simError.message}`);
+        console.log(`    ────────────────────────────────────────────────────────\n`);
         throw new Error(`Direct WETH wrap/unwrap simulation failed: ${simError.message}`);
       }
 
@@ -571,6 +593,29 @@ async function testRouter(
         from: testAddress,
       });
     } catch (simError: any) {
+      // Check for TARGET_NOT_AUTH error and print the address that needs whitelisting
+      const errorMsg = simError.message || "";
+      if (errorMsg.includes("TARGET_NOT_AUTH")) {
+        console.log(`    🔑 TARGET_NOT_AUTH - Need to whitelist: ${targetAddress}`);
+        if (approvalTargetAddress && approvalTargetAddress.toLowerCase() !== targetAddress.toLowerCase()) {
+          console.log(`    🔑 Also check approvalTarget: ${approvalTargetAddress}`);
+        }
+      }
+
+      // Always output full transaction details for Tenderly simulation on ANY simulation failure
+      console.log(`\n    ⚠️  Simulation failed - Full transaction for Tenderly debugging:`);
+      console.log(`    ────────────────────────────────────────────────────────`);
+      console.log(`    From: ${testAddress}`);
+      console.log(`    To: ${trade.to}`);
+      console.log(`    Value: ${trade.value} (${hre.ethers.formatEther(trade.value)} ETH)`);
+      console.log(`    Data: ${trade.data}`);
+      console.log(`    ────────────────────────────────────────────────────────`);
+      console.log(`    Target: ${targetAddress}`);
+      console.log(`    ApprovalTarget: ${approvalTargetAddress || 'N/A'}`);
+      console.log(`    Function: ${functionName}`);
+      console.log(`    Error: ${errorMsg}`);
+      console.log(`    ────────────────────────────────────────────────────────\n`);
+
       throw new Error(`Simulation failed: ${simError.message}`);
     }
 

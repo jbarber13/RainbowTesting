@@ -22,7 +22,7 @@ async function main() {
 
   console.log("STARTING")
   let networkName = hre.network.name
-  let testNetwork = 'bsc'
+  let testNetwork = 'taiko'
   let mainnet = true
   let signer: Signer
 
@@ -36,7 +36,7 @@ async function main() {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.BSC_URL!
+            jsonRpcUrl: process.env.TAIKO_URL!
           },
         },
       ],
@@ -56,13 +56,13 @@ async function main() {
     // Debug: check balance right after getting signer
     console.log("Account:", userAddr)
     const balance = await ethers.provider.getBalance(userAddr)
-    console.log("Balance at fork:", ethers.formatEther(balance), "BNB")
+    console.log("Balance at fork:", ethers.formatEther(balance))
 
     // If balance is insufficient for testing, top up (local fork only)
     if (balance < ethers.parseEther("0.01")) {
       console.log("Insufficient balance for deployment test, topping up...")
       await setBalance(userAddr, ethers.parseEther("1"))
-      console.log("New balance:", ethers.formatEther(await ethers.provider.getBalance(userAddr)), "BNB")
+      console.log("New balance:", ethers.formatEther(await ethers.provider.getBalance(userAddr)))
     }
 
   } else {

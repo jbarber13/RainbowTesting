@@ -143,7 +143,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         supportedRouters: [
             "icecreamswap",
             "enso",
-            "kyberswap",
+            // "kyberswap",  // Not supported on worldchain per API
             // "lusor"  // Commented - may need verification
         ],
         knownSwapTargets: [
@@ -155,12 +155,11 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
         rpcUrl: process.env.WORLDCHAIN_URL
     },
-    // ==================== NEW CHAINS ====================
     bsc: {
         networkName: "bsc",
         chainId: 56,
         chainName: "bsc",
-        rainbowRouterAddress: "0x31750d38d8d1f69af94407002b9322f5765d869a", 
+        rainbowRouterAddress: "0x31750d38d8d1f69af94407002b9322f5765d869a",
         deploymentBlock: 70161721,
         wethAddress: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", // WBNB
         usdcAddress: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // BSC USDC
@@ -194,8 +193,8 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "polygon",
         chainId: 137,
         chainName: "polygon",
-        rainbowRouterAddress: "", // To be deployed
-        deploymentBlock: 0,
+        rainbowRouterAddress: "0xA89A26c4d81A2cca4d0670F77f0FC88362b72248",
+        deploymentBlock: 79796004,
         wethAddress: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC
         usdcAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native USDC
         nativeSymbol: "MATIC",
@@ -223,8 +222,8 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         networkName: "arbitrum",
         chainId: 42161,
         chainName: "arbitrum",
-        rainbowRouterAddress: "", // To be deployed
-        deploymentBlock: 0,
+        rainbowRouterAddress: "0xA89A26c4d81A2cca4d0670F77f0FC88362b72248",
+        deploymentBlock: 406509419,
         wethAddress: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH on Arbitrum
         usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Native USDC
         nativeSymbol: "ETH",
@@ -252,6 +251,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
         rpcUrl: process.env.ARB_URL
     },
+    // ==================== NEW CHAINS ====================
     taiko: {
         networkName: "taiko",
         chainId: 167000,

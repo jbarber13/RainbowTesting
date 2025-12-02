@@ -502,17 +502,34 @@ The Rainbow Router is designed to work with a backend routing service that queri
 - paraswap
 - kyberswap
 - unizen
+- okx
+- zeroex (0x)
+- openocean
 
 **Base:**
 - kyberswap
-- enso
-- oneinch
-- odos
 - icecreamswap
+- openocean
 
 **Worldchain:**
 - icecreamswap
 - enso
+
+**BSC:**
+- oneinch (1inch)
+- odos
+- kyberswap
+- paraswap
+- zeroex (0x)
+- okx
+- icecreamswap
+- openocean
+
+**Polygon:**
+- (Aggregators configured in networkConfig.ts)
+
+**Arbitrum:**
+- (Aggregators configured in networkConfig.ts)
 
 **Note:** Rainbow Router fully supports aggregators using transfer proxy patterns (see [Transfer Proxy Pattern Support](#resolved-transfer-proxy-pattern-support) for implementation details).
 
@@ -669,13 +686,22 @@ Only allows ETH from:
 ### Contract Addresses
 
 **Optimism (Chain ID: 10)**
-- Rainbow Router: `0x80dCD2C737cAFE9f86559bBCed9938eFfB7f7D1A`
+- Rainbow Router: `0xA90845CFc60488cCB917169EeDCF3577092Df29f`
 
 **Base (Chain ID: 8453)**
-- Rainbow Router: `0xA89A26c4d81A2cca4d0670F77f0FC88362b72248`
+- Rainbow Router: `0x816cd361284003e722dbcc3597ca6e3bdb4d46dd`
 
 **Worldchain (Chain ID: 480)**
-- Rainbow Router: `0x25cf2128F603754179379351B805B4F8C0B8dCA4`
+- Rainbow Router: `0x2b53aec27d45a0021c514cdfd6496f99a5e0be21`
+
+**BSC (Chain ID: 56)**
+- Rainbow Router: `0x31750d38d8d1f69af94407002b9322f5765d869a`
+
+**Polygon (Chain ID: 137)**
+- Rainbow Router: `0xA89A26c4d81A2cca4d0670F77f0FC88362b72248`
+
+**Arbitrum (Chain ID: 42161)**
+- Rainbow Router: `0xA89A26c4d81A2cca4d0670F77f0FC88362b72248`
 
 ### Permit2 Canonical Address
 
@@ -1011,14 +1037,68 @@ The repository includes comprehensive test suites:
 - `test/rainbow/testTransferProxy.ts` - Transfer proxy pattern demonstration
 
 **Integration Tests:**
-- `scripts/testRouters/testRoutersOP.ts` - Optimism aggregators
-- `scripts/testRouters/testRoutersBase.ts` - Base aggregators
-- `scripts/testRouters/testRoutersWorldchain.ts` - Worldchain aggregators
+- `scripts/testRouters/testRouters.ts` - Universal router testing script (all chains)
+- `scripts/testRouters/testAllChains.ts` - Sequential test runner for all deployed chains
+
+### Multi-Chain Testing Infrastructure
+
+The repository includes a comprehensive testing system for validating DEX aggregator integrations across all deployed chains.
+
+#### Universal Router Testing Script
+
+**`scripts/testRouters/testRouters.ts`** - Generic testing script that works across all networks:
+
+```bash
+# Test specific network
+npx hardhat run scripts/testRouters/testRouters.ts --network op
+npx hardhat run scripts/testRouters/testRouters.ts --network base
+npx hardhat run scripts/testRouters/testRouters.ts --network bsc
+```
+
+**Features:**
+- **Dynamic Configuration**: Pulls all network config from `networkConfig.ts`
+- **4 Trade Phases**: Tests Native→USDC, Native→WETH, USDC→WETH, WETH→Native
+- **Smart Skip Patterns**: Automatically skips expected limitations (rate limits, insufficient amounts, no routes)
+- **Detailed Reporting**: Categorizes results by success, skipped, and failed with reasons
+- **Timeout Protection**: 60-second timeout on all backend API calls to prevent hanging
+
+**Skip Pattern Categories:**
+- Global patterns (apply to all chains): rate limits, "no routes found"
+- Network-specific patterns: known router limitations per chain
+
+#### Automated Multi-Chain Testing
+
+**`scripts/testRouters/testAllChains.ts`** - Orchestration script that tests all deployed chains sequentially:
+
+```bash
+# Test all chains with Rainbow Router deployments
+npx hardhat run scripts/testRouters/testAllChains.ts
+```
+
+**Features:**
+- **Auto-Discovery**: Automatically detects all chains with non-empty `rainbowRouterAddress` in `networkConfig.ts`
+- **Sequential Execution**: Tests chains one at a time to avoid RPC rate limits
+- **Timeout Protection**: 5-minute timeout per chain to prevent indefinite hanging
+- **RPC Validation**: Skips chains with missing RPC URL configuration
+- **Summary Reporting**: Displays pass/fail summary for all chains at completion
+
+**Current Deployed Chains:**
+- Optimism (10 routers)
+- Base (3 routers)
+- Worldchain (2 routers)
+- BSC (8 routers)
+- Polygon (TBD routers)
+- Arbitrum (TBD routers)
+
+**Timeout Safeguards:**
+- Backend API calls: 60 second timeout (configured in `canoeHelper.ts`)
+- Per-chain testing: 5 minute timeout (configured in `testAllChains.ts`)
+- Prevents hanging on slow/unresponsive RPC endpoints or backend APIs
 
 ### Running Tests
 
 ```bash
-# All tests
+# Unit tests
 npm test
 
 # Specific test file
@@ -1026,6 +1106,12 @@ npx hardhat test test/rainbow/testSignature.ts
 
 # With gas reporting
 REPORT_GAS=true npm test
+
+# Integration tests - single chain
+npx hardhat run scripts/testRouters/testRouters.ts --network op
+
+# Integration tests - all deployed chains
+npx hardhat run scripts/testRouters/testAllChains.ts
 ```
 
 ### Test Coverage Summary
@@ -1173,3 +1259,9 @@ For questions or issues:
 - GitHub: [rainbow/smart-contracts](https://github.com/rainbow-me/smart-contracts)
 - Documentation: This file
 - Tests: See `test/` directory for usage examples
+
+
+## CRITICAL SECURITY RULES
+- NEVER run grep, cat, or any command that could read .env files
+- NEVER reference environment variable values in any context
+- If you need env vars, ask user to provide them securely

@@ -138,22 +138,17 @@ export const getCanoeQuote = async (market: string, params: canoeParams) => {
     let recipient = ZeroAddress
 
     try {
-        const response = await axios.post(baseURL, params)
+        const response = await axios.post(baseURL, params, {
+            timeout: 30000 // 30 second timeout
+        })
 
         txData = response.data.candidateTrade.data
         recipient = response.data.candidateTrade.to
 
     }
     catch (error: any) {
-        console.log("Error fetching swap quote:");
-        if (axios.isAxiosError(error)) {
-            console.error("Status:", error.response?.status);
-            console.error("Response Data:", error.response?.data);
-            // console.error("Headers:", error.response?.headers);
-        } else {
-            // Handle non-Axios errors (network issues, etc.)
-            console.error("An unexpected error occurred:", error.message);
-        }
+        // Error will be caught and logged by caller if needed
+        // Return empty data on error
     }
 
     return { txData, recipient, }
@@ -167,21 +162,16 @@ export const getRawCanoeQuote = async (market: string, params: canoeParams) => {
     let digest = {}
 
     try {
-        const response = await axios.post(baseURL, params)
+        const response = await axios.post(baseURL, params, {
+            timeout: 30000 // 30 second timeout
+        })
         digest = response.data
 
 
     }
     catch (error: any) {
-        console.log("Error fetching swap quote:");
-        if (axios.isAxiosError(error)) {
-            console.error("Status:", error.response?.status);
-            console.error("Response Data:", error.response?.data);
-            // console.error("Headers:", error.response?.headers);
-        } else {
-            // Handle non-Axios errors (network issues, etc.)
-            console.error("An unexpected error occurred:", error.message);
-        }
+        // Error will be caught and logged by caller if needed
+        // Return empty digest on error
     }
 
     return digest
@@ -628,16 +618,12 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
     const url = baseUrl || `http://localhost:3333/market/${market}/swap_quote`;
 
     try {
-        const response = await axios.post(url, params);
+        const response = await axios.post(url, params, {
+            timeout: 30000 // 30 second timeout
+        });
         return response.data;
     } catch (error: any) {
-        console.error(`Error fetching ${market} quote:`);
-        if (axios.isAxiosError(error)) {
-            console.error("Status:", error.response?.status);
-            console.error("Response Data:", error.response?.data);
-        } else {
-            console.error("An unexpected error occurred:", error.message);
-        }
+        // Error will be caught and logged by caller if needed
         throw error;
     }
 };
@@ -657,17 +643,13 @@ export const getRainbowExecution = async (
     };
 
     try {
-        const response = await axios.post(url, requestBody);
+        const response = await axios.post(url, requestBody, {
+            timeout: 30000 // 30 second timeout
+        });
         const executionInfo = response.data as RainbowExecutionInfo;
         return executionInfo;
     } catch (error: any) {
-        console.error(`❌ Error fetching ${market} Rainbow execution info:`);
-        if (axios.isAxiosError(error)) {
-            console.error("Status:", error.response?.status);
-            console.error("Response Data:", error.response?.data);
-        } else {
-            console.error("An unexpected error occurred:", error.message);
-        }
+        // Error will be caught and logged by caller if needed
         throw error;
     }
 };
