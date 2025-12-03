@@ -478,15 +478,21 @@ async function testRouter(
           from: testAddress,
         });
       } catch (simError: any) {
-        // Output transaction details for Tenderly debugging
-        console.log(`\n    ⚠️  Direct WETH wrap/unwrap simulation failed - Tenderly debugging:`);
-        console.log(`    ────────────────────────────────────────────────────────`);
-        console.log(`    From: ${testAddress}`);
-        console.log(`    To: ${trade.to}`);
-        console.log(`    Value: ${trade.value} (${hre.ethers.formatEther(trade.value)} ETH)`);
-        console.log(`    Data: ${trade.data}`);
-        console.log(`    Error: ${simError.message}`);
-        console.log(`    ────────────────────────────────────────────────────────\n`);
+        // Check if this is a known/skipped issue
+        const parsedSimError = parseError(simError);
+        const skipCheck = shouldSkipError(networkKey, parsedSimError);
+
+        if (!skipCheck.skip) {
+          // Unknown error - output full transaction details for Tenderly debugging
+          console.log(`\n    ⚠️  Direct WETH wrap/unwrap simulation failed - Tenderly debugging:`);
+          console.log(`    ────────────────────────────────────────────────────────`);
+          console.log(`    From: ${testAddress}`);
+          console.log(`    To: ${trade.to}`);
+          console.log(`    Value: ${trade.value} (${hre.ethers.formatEther(trade.value)} ETH)`);
+          console.log(`    Data: ${trade.data}`);
+          console.log(`    Error: ${simError.message}`);
+          console.log(`    ────────────────────────────────────────────────────────\n`);
+        }
         throw new Error(`Direct WETH wrap/unwrap simulation failed: ${simError.message}`);
       }
 
