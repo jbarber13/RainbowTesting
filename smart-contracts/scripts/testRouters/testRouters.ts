@@ -593,8 +593,18 @@ async function testRouter(
         from: testAddress,
       });
     } catch (simError: any) {
-      // Check for TARGET_NOT_AUTH error and print the address that needs whitelisting
       const errorMsg = simError.message || "";
+
+      // Quick check: is this a known issue that will be skipped?
+      const parsedSimError = parseError(simError);
+      const skipCheck = shouldSkipError(networkKey, parsedSimError);
+
+      if (skipCheck.skip) {
+        // Known issue - skip verbose logging, just throw clean error
+        throw new Error(`Simulation failed: ${simError.message}`);
+      }
+
+      // Unknown error - print full debugging info
       if (errorMsg.includes("TARGET_NOT_AUTH")) {
         console.log(`    🔑 TARGET_NOT_AUTH - Need to whitelist: ${targetAddress}`);
         if (approvalTargetAddress && approvalTargetAddress.toLowerCase() !== targetAddress.toLowerCase()) {
@@ -602,7 +612,6 @@ async function testRouter(
         }
       }
 
-      // Always output full transaction details for Tenderly simulation on ANY simulation failure
       console.log(`\n    ⚠️  Simulation failed - Full transaction for Tenderly debugging:`);
       console.log(`    ────────────────────────────────────────────────────────`);
       console.log(`    From: ${testAddress}`);
