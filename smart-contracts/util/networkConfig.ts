@@ -45,6 +45,7 @@ export interface NetworkConfig {
     knownSwapTargets: SwapTarget[]; // Known swap target contracts to whitelist on deployment
     ownerAddress: string; // Rainbow Router owner address
     rpcUrl?: string; // Optional RPC URL from env
+    create2FactoryAddress?: string; // Safe Singleton Factory address for deterministic deployments (empty = not available)
 }
 
 // Network configurations indexed by network name
@@ -58,6 +59,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "enso",
             "icecreamswap",
@@ -89,7 +91,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.OP_URL
+        rpcUrl: process.env.OP_URL,
     },
     base: {
         networkName: "base",
@@ -100,6 +102,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "kyberswap",
             "icecreamswap",
@@ -129,7 +132,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369", name: "TychoRouter", protocol: "propellerswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.BASE_URL
+        rpcUrl: process.env.BASE_URL,
     },
     worldchain: {
         networkName: "worldchain",
@@ -140,6 +143,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4200000000000000000000000000000000000006",
         usdcAddress: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1", // Native USDC on World Chain
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "icecreamswap",
             "enso",
@@ -153,7 +157,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xf75584ef6673ad213a685a1b58cc0330b8ea22cf", name: "EnsoRouter", protocol: "enso" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.WORLDCHAIN_URL
+        rpcUrl: process.env.WORLDCHAIN_URL,
     },
     bsc: {
         networkName: "bsc",
@@ -164,6 +168,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", // WBNB
         usdcAddress: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // BSC USDC
         nativeSymbol: "BNB",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "odos",
@@ -187,7 +192,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.BSC_URL
+        rpcUrl: process.env.BSC_URL,
     },
     polygon: {
         networkName: "polygon",
@@ -198,6 +203,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC
         usdcAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native USDC
         nativeSymbol: "MATIC",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "odos",
@@ -216,7 +222,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.POLYGON_URL
+        rpcUrl: process.env.POLYGON_URL,
     },
     arbitrum: {
         networkName: "arbitrum",
@@ -227,6 +233,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH on Arbitrum
         usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Native USDC
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "odos",
@@ -249,7 +256,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.ARB_URL
+        rpcUrl: process.env.ARB_URL,
     },
     // ==================== NEW CHAINS ====================
     taiko: {
@@ -261,6 +268,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xA51894664A773981C6C112C43ce576f315d5b1B6", // WETH on Taiko
         usdcAddress: "0x07d83526730c7438048D55A4fc0b850e2aaB6f0b", // USDC on Taiko
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             // Limited router support on Taiko - needs verification
             "kyberswap",
@@ -269,7 +277,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", name: "MetaAggregationRouterV2", protocol: "kyberswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.TAIKO_URL
+        rpcUrl: process.env.TAIKO_URL,
     },
     celo: {
         networkName: "celo",
@@ -280,6 +288,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x471EcE3750Da237f93B8E339c536989b8978a438", // CELO (native wrapped)
         usdcAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // Native USDC on Celo
         nativeSymbol: "CELO",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "icecreamswap",
             "openocean",
@@ -289,7 +298,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.CELO_URL
+        rpcUrl: process.env.CELO_URL,
     },
     avax: {
         networkName: "avax",
@@ -300,6 +309,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", // WAVAX
         usdcAddress: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", // Native USDC on Avalanche
         nativeSymbol: "AVAX",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "odos",
@@ -322,7 +332,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.AVAX_URL
+        rpcUrl: process.env.AVAX_URL,
     },
     linea: {
         networkName: "linea",
@@ -333,6 +343,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f", // WETH on Linea
         usdcAddress: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff", // USDC on Linea
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "odos",
@@ -350,7 +361,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.LINEA_URL
+        rpcUrl: process.env.LINEA_URL,
     },
     blast: {
         networkName: "blast",
@@ -361,6 +372,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4300000000000000000000000000000000000004", // WETH on Blast
         usdcAddress: "0x4300000000000000000000000000000000000003", // USDB (Blast native stablecoin)
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "zeroex",
             "icecreamswap",
@@ -372,7 +384,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.BLAST_URL
+        rpcUrl: process.env.BLAST_URL,
     },
     scroll: {
         networkName: "scroll",
@@ -383,6 +395,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x5300000000000000000000000000000000000004", // WETH on Scroll
         usdcAddress: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4", // USDC on Scroll
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "odos",
             "kyberswap",
@@ -398,7 +411,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.SCROLL_URL
+        rpcUrl: process.env.SCROLL_URL,
     },
     // ==================== ADDITIONAL CHAINS ====================
     zksync: {
@@ -410,6 +423,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x8Ebe4A94740515945ad826238Fc4D56c6B8b0e60", // WETH on zkSync Era
         usdcAddress: "0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4", // USDC on zkSync Era
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "odos",
             "kyberswap",
@@ -423,7 +437,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x36A1aCbbCAfca2468b85011DDD16E7Cb4d673230", name: "OpenOceanExchangeV2", protocol: "openocean" }, // zkSync-specific address
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.ZKSYNC_URL
+        rpcUrl: process.env.ZKSYNC_URL,
     },
     monad: {
         networkName: "monad",
@@ -434,12 +448,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WMON - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "MON",
+        create2FactoryAddress: "", // Safe Singleton Factory not yet deployed on Monad
         supportedRouters: [
             // New chain - router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.MONAD_URL
+        rpcUrl: process.env.MONAD_URL,
     },
     sei: {
         networkName: "sei",
@@ -450,12 +465,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WSEI - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "SEI",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             // SEI EVM router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.SEI_URL
+        rpcUrl: process.env.SEI_URL,
     },
     rootstock: {
         networkName: "rootstock",
@@ -466,6 +482,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x967f8799aF07DF1534d48A95a5C9FEBE92c53ae0", // WRBTC
         usdcAddress: "", // Bridged USDC - To be confirmed
         nativeSymbol: "RBTC",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Rootstock
         supportedRouters: [
             "openocean",
         ],
@@ -473,7 +490,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.ROOTSTOCK_URL
+        rpcUrl: process.env.ROOTSTOCK_URL,
     },
     filecoin: {
         networkName: "filecoin",
@@ -484,12 +501,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A", // WFIL
         usdcAddress: "", // To be confirmed
         nativeSymbol: "FIL",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Filecoin
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.FILECOIN_URL
+        rpcUrl: process.env.FILECOIN_URL,
     },
     boba: {
         networkName: "boba",
@@ -500,6 +518,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000", // WETH on Boba
         usdcAddress: "0x66a2A913e447d6b4BF33EFbec43aAeF87890FBbc", // USDC on Boba
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "icecreamswap",
         ],
@@ -507,7 +526,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x698a912F8CA34Df9b46E6Ea4A2B2DB0B7151b083", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.BOBA_URL
+        rpcUrl: process.env.BOBA_URL,
     },
     telos: {
         networkName: "telos",
@@ -518,6 +537,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xD102cE6A4dB07D247fcc28F366A623Df0938CA9E", // WTLOS
         usdcAddress: "", // To be confirmed
         nativeSymbol: "TLOS",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Telos
         supportedRouters: [
             "icecreamswap",
             "openocean",
@@ -527,7 +547,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.TELOS_URL
+        rpcUrl: process.env.TELOS_URL,
     },
     lightlink: {
         networkName: "lightlink",
@@ -538,6 +558,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "ETH",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on LightLink
         supportedRouters: [
             "icecreamswap",
         ],
@@ -545,7 +566,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xE578184bC88EB48485Bba23a37B5509578d2aE38", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.LIGHTLINK_URL
+        rpcUrl: process.env.LIGHTLINK_URL,
     },
     hemi: {
         networkName: "hemi",
@@ -556,12 +577,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "ETH",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Hemi
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.HEMI_URL
+        rpcUrl: process.env.HEMI_URL,
     },
     xdc: {
         networkName: "xdc",
@@ -572,6 +594,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x951857744785E80e2De051c32EE7b25f9c458C42", // WXDC
         usdcAddress: "0x2a8e898b6242355c290e1f4fc966b8788729a4d4", // USDC.e (Bridged)
         nativeSymbol: "XDC",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on XDC
         supportedRouters: [
             "icecreamswap",
         ],
@@ -579,7 +602,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xBb5e1777A331ED93E07cF043363e48d320eb96c4", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.XDC_URL
+        rpcUrl: process.env.XDC_URL,
     },
     unichain: {
         networkName: "unichain",
@@ -590,6 +613,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4200000000000000000000000000000000000006", // WETH on Unichain (OP Stack standard)
         usdcAddress: "0x078D782b760474a361dDA0AF3839290b0EF57AD6", // Native USDC on Unichain
         nativeSymbol: "ETH",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "odos",
             "kyberswap",
@@ -603,7 +627,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0xFfA5ec2e444e4285108e4a17b82dA495c178427B", name: "TychoRouter", protocol: "propellerswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.UNICHAIN_URL
+        rpcUrl: process.env.UNICHAIN_URL,
     },
     sonic: {
         networkName: "sonic",
@@ -614,6 +638,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38", // Wrapped S (wS)
         usdcAddress: "0x29219dd400f2Bf60E5a23d13Be72B486D4038894", // USDC on Sonic
         nativeSymbol: "S",
+        create2FactoryAddress: "", // Safe Singleton Factory not confirmed on Sonic - needs verification
         supportedRouters: [
             "kyberswap",
             "odos",
@@ -625,7 +650,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.SONIC_URL
+        rpcUrl: process.env.SONIC_URL,
     },
     redbelly: {
         networkName: "redbelly",
@@ -636,12 +661,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WRBNT - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "RBNT",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Redbelly
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.REDBELLY_URL
+        rpcUrl: process.env.REDBELLY_URL,
     },
     lens: {
         networkName: "lens",
@@ -652,12 +678,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WETH - To be confirmed (zkSync-based)
         usdcAddress: "", // To be confirmed
         nativeSymbol: "GHO",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Lens
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.LENS_URL
+        rpcUrl: process.env.LENS_URL,
     },
     goat: {
         networkName: "goat",
@@ -668,12 +695,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WBTC - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "BTC",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on GOAT
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.GOAT_URL
+        rpcUrl: process.env.GOAT_URL,
     },
     mantle: {
         networkName: "mantle",
@@ -684,6 +712,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8", // WMNT
         usdcAddress: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9", // USDC on Mantle
         nativeSymbol: "MNT",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "odos",
             "kyberswap",
@@ -699,7 +728,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.MANTLE_URL
+        rpcUrl: process.env.MANTLE_URL,
     },
     nibiru: {
         networkName: "nibiru",
@@ -710,12 +739,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WNIBI - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "NIBI",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Nibiru
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.NIBIRU_URL
+        rpcUrl: process.env.NIBIRU_URL,
     },
     plasma: {
         networkName: "plasma",
@@ -726,6 +756,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WXPL - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "XPL",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "kyberswap",
             "openocean",
@@ -735,7 +766,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.PLASMA_URL
+        rpcUrl: process.env.PLASMA_URL,
     },
     etherlink: {
         networkName: "etherlink",
@@ -746,6 +777,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WXTZ - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "XTZ",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Etherlink
         supportedRouters: [
             "kyberswap",
         ],
@@ -753,7 +785,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", name: "MetaAggregationRouterV2", protocol: "kyberswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.ETHERLINK_URL
+        rpcUrl: process.env.ETHERLINK_URL,
     },
     bob: {
         networkName: "bob",
@@ -764,6 +796,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0x4200000000000000000000000000000000000006", // WETH on BOB (OP Stack standard)
         usdcAddress: "", // USDC - To be confirmed (CCIP upgraded)
         nativeSymbol: "ETH",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on BOB
         supportedRouters: [
             "icecreamswap",
         ],
@@ -771,7 +804,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x698a912F8CA34Df9b46E6Ea4A2B2DB0B7151b083", name: "IceCreamSwapV2Router", protocol: "icecreamswap" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.BOB_URL
+        rpcUrl: process.env.BOB_URL,
     },
     corn: {
         networkName: "corn",
@@ -782,12 +815,13 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "", // WBTCN - To be confirmed
         usdcAddress: "", // To be confirmed
         nativeSymbol: "BTCN",
+        create2FactoryAddress: "", // Safe Singleton Factory not available on Corn
         supportedRouters: [
             // Router support to be verified
         ],
         knownSwapTargets: [],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.CORN_URL
+        rpcUrl: process.env.CORN_URL,
     },
     gnosis: {
         networkName: "gnosis",
@@ -798,6 +832,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
         wethAddress: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d", // WXDAI
         usdcAddress: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83", // USDC on Gnosis
         nativeSymbol: "XDAI",
+        create2FactoryAddress: "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7",
         supportedRouters: [
             "oneinch",
             "paraswap",
@@ -809,8 +844,8 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
             { address: "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64", name: "OpenOceanExchangeV2", protocol: "openocean" },
         ],
         ownerAddress: "0x3CB68a6762041aA05E762814A8791CA9d98E79A0",
-        rpcUrl: process.env.GNOSIS_URL
-    }
+        rpcUrl: process.env.GNOSIS_URL,
+    },
 };
 
 // Get network config by network name (e.g., "op", "base", "worldchain")

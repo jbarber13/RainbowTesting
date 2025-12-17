@@ -1,5 +1,5 @@
 
-import { Signer } from "ethers";
+import { Signer, Contract } from "ethers";
 import { RainbowRouter__factory } from "../typechain-types"
 import hre, { network } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
@@ -7,6 +7,13 @@ import { getNetworkConfig } from "../util/networkConfig";
 
 const { ethers } = require("hardhat");
 
+// Parse CLI args for --deterministic flag
+const args = process.argv.slice(2);
+const deterministicMode = args.includes('--deterministic');
+
+// Safe Singleton Factory - canonical address on all major EVM chains
+// https://github.com/safe-global/safe-singleton-factory
+const SAFE_SINGLETON_FACTORY = "0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7";
 
 const name = "Rainbow Router"
 const version = "1.0"
@@ -15,12 +22,106 @@ const version = "1.0"
 const userAddr = "0x085909388fc0cE9E5761ac8608aF8f2F52cb8B89"
 const gfxOwner = "0x00a0bB9dfD2db3a6E447147426aB2D1B5Ac356d5"
 
+/**
+ * Generate a version-based salt for deterministic deployment
+ * This ensures the same address across all chains for a given version
+ */
+function getVersionSalt(ver: string): string {
+  return ethers.keccak256(ethers.toUtf8Bytes(`rainbow-router-${ver}`));
+}
+
+/**
+ * Compute the deterministic address without deploying
+ */
+async function computeDeterministicAddress(
+  contractName: string,
+  ver: string,
+  initCodeHash: string
+): Promise<string> {
+  const salt = getVersionSalt(ver);
+
+  // CREATE2 address formula: keccak256(0xff ++ factory ++ salt ++ keccak256(initCode))[12:]
+  const packed = ethers.solidityPacked(
+    ["bytes1", "address", "bytes32", "bytes32"],
+    ["0xff", SAFE_SINGLETON_FACTORY, salt, initCodeHash]
+  );
+  const hash = ethers.keccak256(packed);
+  return ethers.getAddress("0x" + hash.slice(-40));
+}
+
+/**
+ * Deploy contract deterministically using Safe Singleton Factory (CREATE2)
+ */
+async function deployDeterministic(
+  signer: Signer,
+  contractName: string,
+  ver: string
+): Promise<string> {
+  const salt = getVersionSalt(ver);
+
+  // Get init code (deployment bytecode + constructor args)
+  const RainbowRouter = await ethers.getContractFactory("RainbowRouter");
+  const deployTx = await RainbowRouter.getDeployTransaction(contractName, ver);
+  const initCode = deployTx.data;
+
+  if (!initCode) {
+    throw new Error("Failed to generate init code");
+  }
+
+  // Compute expected address
+  const initCodeHash = ethers.keccak256(initCode);
+  const expectedAddress = await computeDeterministicAddress(contractName, ver, initCodeHash);
+
+  console.log("Expected deterministic address:", expectedAddress);
+  console.log("Salt:", salt);
+  console.log("Init code hash:", initCodeHash);
+
+  // Check if already deployed
+  const existingCode = await ethers.provider.getCode(expectedAddress);
+  if (existingCode !== "0x") {
+    console.log("Contract already deployed at deterministic address:", expectedAddress);
+    return expectedAddress;
+  }
+
+  // Check if Safe Singleton Factory exists on this chain
+  const factoryCode = await ethers.provider.getCode(SAFE_SINGLETON_FACTORY);
+  if (factoryCode === "0x") {
+    throw new Error(
+      `Safe Singleton Factory not deployed on this chain at ${SAFE_SINGLETON_FACTORY}. ` +
+      `Please deploy the factory first or use non-deterministic deployment.`
+    );
+  }
+
+  // Deploy via CREATE2
+  const factory = new Contract(
+    SAFE_SINGLETON_FACTORY,
+    [
+      "function deploy(bytes memory _initCode, bytes32 _salt) public returns (address payable)"
+    ],
+    signer
+  );
+
+  console.log("Deploying via Safe Singleton Factory (CREATE2)...");
+  const tx = await factory.deploy(initCode, salt, { gasLimit: 5000000 });
+  await tx.wait();
+
+  // Verify deployment
+  const deployedCode = await ethers.provider.getCode(expectedAddress);
+  if (deployedCode === "0x") {
+    throw new Error("Deployment failed - no code at expected address");
+  }
+
+  console.log("Successfully deployed at:", expectedAddress);
+  return expectedAddress;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 async function main() {
 
   console.log("STARTING")
+  console.log("Deterministic mode:", deterministicMode ? "ENABLED" : "DISABLED (default)")
   let networkName = hre.network.name
   let testNetwork = 'taiko'
   let mainnet = true
@@ -72,15 +173,27 @@ async function main() {
   }
 
 
+  let contractAddress: string;
   let contract;
+
   try {
     console.log("Deploying contract...")
     console.log("Signer balance:", ethers.formatEther(await ethers.provider.getBalance(await signer.getAddress())), "ETH")
 
-    contract = await new RainbowRouter__factory().connect(signer).deploy(name, version, {
-      gasLimit: 5000000
-    })
-    await contract.waitForDeployment()
+    if (deterministicMode) {
+      // Deterministic deployment via CREATE2 (Safe Singleton Factory)
+      console.log("\n=== DETERMINISTIC DEPLOYMENT ===")
+      contractAddress = await deployDeterministic(signer, name, version);
+      contract = RainbowRouter__factory.connect(contractAddress, signer);
+    } else {
+      // Standard deployment (default for testing)
+      console.log("\n=== STANDARD DEPLOYMENT ===")
+      contract = await new RainbowRouter__factory().connect(signer).deploy(name, version, {
+        gasLimit: 5000000
+      })
+      await contract.waitForDeployment()
+      contractAddress = await contract.getAddress()
+    }
   } catch (error: any) {
     console.error("Deployment failed:", error.message)
     if (error.data) {
@@ -95,7 +208,6 @@ async function main() {
   if (mainnet) {
     await sleep(5000)
   }
-  const contractAddress = await contract.getAddress()
   console.log("DEPLOYED: ", contractAddress)
 
 

@@ -419,4 +419,267 @@ describe("Admin", function () {
     ).to.be.revertedWith("NO_RECEIVE"); // Match the expected custom error
     // OR ).to.be.reverted(); // If no specific reason is given / no fallback exists
   });
+
+  describe("Pausable Functionality", () => {
+    // Ensure contract starts in unpaused state before each test
+    beforeEach(async () => {
+      const [owner] = signers;
+      const isPaused = await instance.paused();
+      if (isPaused) {
+        await instance.connect(owner).unpause();
+      }
+    });
+
+    it("should allow owner to pause the contract", async () => {
+      const [owner] = signers;
+      const ownerAddress = await owner.getAddress();
+
+      await expect(instance.connect(owner).pause())
+        .to.emit(instance, "Paused")
+        .withArgs(ownerAddress);
+
+      expect(await instance.paused()).to.equal(true);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should allow owner to unpause the contract", async () => {
+      const [owner] = signers;
+      const ownerAddress = await owner.getAddress();
+
+      await instance.connect(owner).pause();
+      await expect(instance.connect(owner).unpause())
+        .to.emit(instance, "Unpaused")
+        .withArgs(ownerAddress);
+
+      expect(await instance.paused()).to.equal(false);
+    });
+
+    it("should revert if non-owner tries to pause", async () => {
+      const [, nonOwner] = signers;
+
+      await expect(instance.connect(nonOwner).pause())
+        .to.be.revertedWith("ONLY_OWNER");
+    });
+
+    it("should revert if non-owner tries to unpause", async () => {
+      const [owner, nonOwner] = signers;
+
+      await instance.connect(owner).pause();
+      await expect(instance.connect(nonOwner).unpause())
+        .to.be.revertedWith("ONLY_OWNER");
+
+      // Cleanup: unpause for next tests
+      await instance.connect(owner).unpause();
+    });
+
+    it("should revert if trying to pause when already paused", async () => {
+      const [owner] = signers;
+
+      await instance.connect(owner).pause();
+      await expect(instance.connect(owner).pause())
+        .to.be.revertedWithCustomError(instance, "EnforcedPause");
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should revert if trying to unpause when not paused", async () => {
+      const [owner] = signers;
+
+      await expect(instance.connect(owner).unpause())
+        .to.be.revertedWithCustomError(instance, "ExpectedPause");
+    });
+
+    it("should emit ContractPaused event", async () => {
+      const [owner] = signers;
+      const ownerAddress = await owner.getAddress();
+
+      await expect(instance.connect(owner).pause())
+        .to.emit(instance, "ContractPaused")
+        .withArgs(ownerAddress);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should emit ContractUnpaused event", async () => {
+      const [owner] = signers;
+      const ownerAddress = await owner.getAddress();
+
+      await instance.connect(owner).pause();
+      await expect(instance.connect(owner).unpause())
+        .to.emit(instance, "ContractUnpaused")
+        .withArgs(ownerAddress);
+    });
+
+    it("should preserve swap target whitelist when paused", async () => {
+      const [owner] = signers;
+      const target = "0x1234567890123456789012345678901234567890";
+
+      await instance.connect(owner).updateSwapTargets(target, true);
+      await instance.connect(owner).pause();
+
+      expect(await instance.swapTargets(target)).to.equal(true);
+
+      await instance.connect(owner).unpause();
+      expect(await instance.swapTargets(target)).to.equal(true);
+    });
+
+    it("should preserve valid signers when paused", async () => {
+      const [owner] = signers;
+      const signer = "0x1234567890123456789012345678901234567890";
+
+      await instance.connect(owner).updateValidSigner(signer, true);
+      await instance.connect(owner).pause();
+
+      expect(await instance.validSigners(signer)).to.equal(true);
+
+      await instance.connect(owner).unpause();
+      expect(await instance.validSigners(signer)).to.equal(true);
+    });
+
+    it("should allow updateSwapTargets when paused", async () => {
+      const [owner] = signers;
+      const target = "0x2234567890123456789012345678901234567890";
+
+      await instance.connect(owner).pause();
+
+      await expect(instance.connect(owner).updateSwapTargets(target, true))
+        .to.not.be.reverted;
+
+      expect(await instance.swapTargets(target)).to.equal(true);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should allow updateValidSigner when paused", async () => {
+      const [owner] = signers;
+      const signer = "0x2234567890123456789012345678901234567890";
+
+      await instance.connect(owner).pause();
+
+      await expect(instance.connect(owner).updateValidSigner(signer, true))
+        .to.not.be.reverted;
+
+      expect(await instance.validSigners(signer)).to.equal(true);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should allow withdrawToken when paused", async () => {
+      const amount = 10000000n;
+      const [owner, , receiver] = signers;
+
+      const instanceAddress = await instance.getAddress();
+      const wethAddress = await weth.getAddress();
+      const receiverAddress = await receiver.getAddress();
+
+      // Setup: Send tokens to contract
+      await weth.connect(owner).deposit({ value: amount });
+      await weth.connect(owner).transfer(instanceAddress, amount);
+
+      // Pause
+      await instance.connect(owner).pause();
+
+      // Withdraw should still work
+      await expect(
+        instance.connect(owner).withdrawToken(wethAddress, receiverAddress, amount)
+      ).to.not.be.reverted;
+
+      const receiverBalance = await weth.balanceOf(receiverAddress);
+      expect(receiverBalance).to.be.gte(amount);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should allow withdrawEth when paused", async () => {
+      const amount = 10000000n;
+      const [owner, , receiver] = signers;
+      const instanceAddress = await instance.getAddress();
+      const receiverAddress = await receiver.getAddress();
+
+      // Setup: Send ETH to contract
+      await owner.sendTransaction({ to: instanceAddress, value: amount });
+
+      const initialReceiverBalance = await hre.ethers.provider.getBalance(receiverAddress);
+
+      // Pause
+      await instance.connect(owner).pause();
+
+      // Withdraw should still work
+      await expect(
+        instance.connect(owner).withdrawEth(receiverAddress, amount)
+      ).to.not.be.reverted;
+
+      const finalReceiverBalance = await hre.ethers.provider.getBalance(receiverAddress);
+      expect(finalReceiverBalance).to.equal(initialReceiverBalance + amount);
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should block fillQuoteTokenToEth when paused", async () => {
+      const [owner] = signers;
+      const wethAddress = await weth.getAddress();
+      const targetAddress = hre.ethers.getAddress(MAINNET_ADDRESS_1INCH);
+
+      // Setup
+      await instance.connect(owner).updateSwapTargets(targetAddress, true);
+      await instance.connect(owner).updateValidSigner(ZeroAddress, true);
+
+      const warrant = {
+        nonce: 0,
+        validBefore: Math.floor(Date.now() / 1000) + 3600,
+        validAfter: Math.floor(Date.now() / 1000) - 60,
+        verifyingSigner: ZeroAddress,
+        signature: "0x"
+      };
+
+      // Pause
+      await instance.connect(owner).pause();
+
+      // Attempt swap - should revert
+      await expect(
+        instance.connect(owner).fillQuoteTokenToEth(
+          wethAddress,
+          targetAddress,
+          targetAddress,
+          "0x",
+          1000000n,
+          0n,
+          warrant
+        )
+      ).to.be.revertedWithCustomError(instance, "EnforcedPause");
+
+      // Cleanup
+      await instance.connect(owner).unpause();
+    });
+
+    it("should handle multiple pause/unpause cycles correctly", async () => {
+      const [owner] = signers;
+
+      // First cycle
+      await instance.connect(owner).pause();
+      expect(await instance.paused()).to.equal(true);
+      await instance.connect(owner).unpause();
+      expect(await instance.paused()).to.equal(false);
+
+      // Second cycle
+      await instance.connect(owner).pause();
+      expect(await instance.paused()).to.equal(true);
+      await instance.connect(owner).unpause();
+      expect(await instance.paused()).to.equal(false);
+
+      // Third cycle
+      await instance.connect(owner).pause();
+      expect(await instance.paused()).to.equal(true);
+      await instance.connect(owner).unpause();
+      expect(await instance.paused()).to.equal(false);
+    });
+  });
 });

@@ -91,6 +91,12 @@ contract RainbowRouter is BaseAggregator {
     /// @dev Event emitted when a valid signer gets removed
     event ValidSignerRemoved(address indexed target);
 
+    /// @dev Event emitted when the contract is paused
+    event ContractPaused(address indexed account);
+
+    /// @dev Event emitted when the contract is unpaused
+    event ContractUnpaused(address indexed account);
+
     /// @dev modifier that ensures only the owner is allowed to call a specific method
     modifier onlyOwner() {
         require(msg.sender == owner, "ONLY_OWNER");
@@ -138,6 +144,22 @@ contract RainbowRouter is BaseAggregator {
         } else {
             emit ValidSignerRemoved(target);
         }
+    }
+
+    /// @dev Pauses all swap operations on the contract
+    /// Only the owner can call this function
+    /// Emits a Paused event from the Pausable contract
+    function pause() external onlyOwner {
+        _pause();
+        emit ContractPaused(msg.sender);
+    }
+
+    /// @dev Unpauses all swap operations on the contract
+    /// Only the owner can call this function
+    /// Emits an Unpaused event from the Pausable contract
+    function unpause() external onlyOwner {
+        _unpause();
+        emit ContractUnpaused(msg.sender);
     }
 
     /// @dev method to withdraw ERC20 tokens (from the fees)

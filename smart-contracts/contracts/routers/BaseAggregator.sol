@@ -8,12 +8,13 @@ import "../libraries/SafeTransferLib.sol";
 import "../libraries/CanoeHelper.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "../interfaces/openzeppelin/Pausable.sol";
 
 //testing
 import "hardhat/console.sol";
 
 /// @title Rainbow base aggregator contract
-contract BaseAggregator is EIP712 {
+contract BaseAggregator is EIP712, Pausable {
     /// @dev Used to prevent re-entrancy
     uint256 internal status;
 
@@ -71,6 +72,7 @@ contract BaseAggregator is EIP712 {
     )
         external
         payable
+        whenNotPaused
         nonReentrant
         onlyApprovedTarget(target)
         onlyApprovedSigner(warrant.verifyingSigner)
@@ -157,6 +159,7 @@ contract BaseAggregator is EIP712 {
     )
         external
         payable
+        whenNotPaused
         nonReentrant
         onlyApprovedTarget(target)
         onlyApprovedTarget(approvalTarget)
@@ -198,6 +201,7 @@ contract BaseAggregator is EIP712 {
     )
         external
         payable
+        whenNotPaused
         nonReentrant
         onlyApprovedTarget(target)
         onlyApprovedTarget(approvalTarget)
@@ -247,6 +251,7 @@ contract BaseAggregator is EIP712 {
     )
         external
         payable
+        whenNotPaused
         nonReentrant
         onlyApprovedTarget(target)
         onlyApprovedTarget(approvalTarget)
@@ -285,6 +290,7 @@ contract BaseAggregator is EIP712 {
     )
         external
         payable
+        whenNotPaused
         nonReentrant
         onlyApprovedTarget(target)
         onlyApprovedTarget(approvalTarget)

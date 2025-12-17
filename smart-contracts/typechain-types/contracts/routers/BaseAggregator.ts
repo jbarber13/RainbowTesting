@@ -86,11 +86,14 @@ export interface BaseAggregatorInterface extends Interface {
       | "fillQuoteTokenToEthWithPermit"
       | "fillQuoteTokenToToken"
       | "fillQuoteTokenToTokenWithPermit"
+      | "paused"
       | "swapTargets"
       | "validSigners"
   ): FunctionFragment;
 
-  getEvent(nameOrSignatureOrTopic: "EIP712DomainChanged"): EventFragment;
+  getEvent(
+    nameOrSignatureOrTopic: "EIP712DomainChanged" | "Paused" | "Unpaused"
+  ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "eip712Domain",
@@ -158,6 +161,7 @@ export interface BaseAggregatorInterface extends Interface {
       CanoeHelper.WarrantStruct
     ]
   ): string;
+  encodeFunctionData(functionFragment: "paused", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "swapTargets",
     values: [AddressLike]
@@ -191,6 +195,7 @@ export interface BaseAggregatorInterface extends Interface {
     functionFragment: "fillQuoteTokenToTokenWithPermit",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "swapTargets",
     data: BytesLike
@@ -205,6 +210,30 @@ export namespace EIP712DomainChangedEvent {
   export type InputTuple = [];
   export type OutputTuple = [];
   export interface OutputObject {}
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace UnpausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
   export type Log = TypedEventLog<Event>;
@@ -342,6 +371,8 @@ export interface BaseAggregator extends BaseContract {
     "payable"
   >;
 
+  paused: TypedContractMethod<[], [boolean], "view">;
+
   swapTargets: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   validSigners: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
@@ -445,6 +476,9 @@ export interface BaseAggregator extends BaseContract {
     "payable"
   >;
   getFunction(
+    nameOrSignature: "paused"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
     nameOrSignature: "swapTargets"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
@@ -458,6 +492,20 @@ export interface BaseAggregator extends BaseContract {
     EIP712DomainChangedEvent.OutputTuple,
     EIP712DomainChangedEvent.OutputObject
   >;
+  getEvent(
+    key: "Paused"
+  ): TypedContractEvent<
+    PausedEvent.InputTuple,
+    PausedEvent.OutputTuple,
+    PausedEvent.OutputObject
+  >;
+  getEvent(
+    key: "Unpaused"
+  ): TypedContractEvent<
+    UnpausedEvent.InputTuple,
+    UnpausedEvent.OutputTuple,
+    UnpausedEvent.OutputObject
+  >;
 
   filters: {
     "EIP712DomainChanged()": TypedContractEvent<
@@ -469,6 +517,28 @@ export interface BaseAggregator extends BaseContract {
       EIP712DomainChangedEvent.InputTuple,
       EIP712DomainChangedEvent.OutputTuple,
       EIP712DomainChangedEvent.OutputObject
+    >;
+
+    "Paused(address)": TypedContractEvent<
+      PausedEvent.InputTuple,
+      PausedEvent.OutputTuple,
+      PausedEvent.OutputObject
+    >;
+    Paused: TypedContractEvent<
+      PausedEvent.InputTuple,
+      PausedEvent.OutputTuple,
+      PausedEvent.OutputObject
+    >;
+
+    "Unpaused(address)": TypedContractEvent<
+      UnpausedEvent.InputTuple,
+      UnpausedEvent.OutputTuple,
+      UnpausedEvent.OutputObject
+    >;
+    Unpaused: TypedContractEvent<
+      UnpausedEvent.InputTuple,
+      UnpausedEvent.OutputTuple,
+      UnpausedEvent.OutputObject
     >;
   };
 }

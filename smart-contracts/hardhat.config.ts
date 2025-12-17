@@ -1,4 +1,6 @@
 import "@nomicfoundation/hardhat-toolbox"; // Includes ethers, chai-matchers, typechain, verify, etc.
+import "hardhat-deploy";
+import "hardhat-deploy-ethers";
 import { HardhatUserConfig, task } from 'hardhat/config';
 import { config as dotEnvConfig } from "dotenv";
 
@@ -11,6 +13,11 @@ const zaddr =
 // Go to https://hardhat.org/config/ to learn more
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
+  namedAccounts: {
+    deployer: {
+      default: 0, // First account from accounts array
+    },
+  },
   etherscan: {
     // Etherscan V2 API - single universal API key for all Etherscan-compatible chains
     apiKey: process.env.MAINNET_API_KEY || "",

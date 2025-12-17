@@ -88,8 +88,11 @@ export interface RainbowRouterInterface extends Interface {
       | "fillQuoteTokenToTokenWithPermit"
       | "name"
       | "owner"
+      | "pause"
+      | "paused"
       | "swapTargets"
       | "transferOwnership"
+      | "unpause"
       | "updateSwapTargets"
       | "updateValidSigner"
       | "validSigners"
@@ -100,12 +103,16 @@ export interface RainbowRouterInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "ContractPaused"
+      | "ContractUnpaused"
       | "EIP712DomainChanged"
       | "EthWithdrawn"
       | "OwnerChanged"
+      | "Paused"
       | "SwapTargetAdded"
       | "SwapTargetRemoved"
       | "TokenWithdrawn"
+      | "Unpaused"
       | "ValidSignerAdded"
       | "ValidSignerRemoved"
   ): EventFragment;
@@ -178,6 +185,8 @@ export interface RainbowRouterInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(functionFragment: "pause", values?: undefined): string;
+  encodeFunctionData(functionFragment: "paused", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "swapTargets",
     values: [AddressLike]
@@ -186,6 +195,7 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "transferOwnership",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "updateSwapTargets",
     values: [AddressLike, boolean]
@@ -234,6 +244,8 @@ export interface RainbowRouterInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "pause", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "swapTargets",
     data: BytesLike
@@ -242,6 +254,7 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "unpause", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "updateSwapTargets",
     data: BytesLike
@@ -263,6 +276,30 @@ export interface RainbowRouterInterface extends Interface {
     functionFragment: "withdrawToken",
     data: BytesLike
   ): Result;
+}
+
+export namespace ContractPausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ContractUnpausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace EIP712DomainChangedEvent {
@@ -294,6 +331,18 @@ export namespace OwnerChangedEvent {
   export interface OutputObject {
     newOwner: string;
     oldOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -336,6 +385,18 @@ export namespace TokenWithdrawnEvent {
     token: string;
     target: string;
     amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace UnpausedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -502,6 +563,10 @@ export interface RainbowRouter extends BaseContract {
 
   owner: TypedContractMethod<[], [string], "view">;
 
+  pause: TypedContractMethod<[], [void], "nonpayable">;
+
+  paused: TypedContractMethod<[], [boolean], "view">;
+
   swapTargets: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   transferOwnership: TypedContractMethod<
@@ -509,6 +574,8 @@ export interface RainbowRouter extends BaseContract {
     [void],
     "nonpayable"
   >;
+
+  unpause: TypedContractMethod<[], [void], "nonpayable">;
 
   updateSwapTargets: TypedContractMethod<
     [target: AddressLike, add: boolean],
@@ -643,11 +710,20 @@ export interface RainbowRouter extends BaseContract {
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "pause"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "paused"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
     nameOrSignature: "swapTargets"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "unpause"
+  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "updateSwapTargets"
   ): TypedContractMethod<
@@ -684,6 +760,20 @@ export interface RainbowRouter extends BaseContract {
   >;
 
   getEvent(
+    key: "ContractPaused"
+  ): TypedContractEvent<
+    ContractPausedEvent.InputTuple,
+    ContractPausedEvent.OutputTuple,
+    ContractPausedEvent.OutputObject
+  >;
+  getEvent(
+    key: "ContractUnpaused"
+  ): TypedContractEvent<
+    ContractUnpausedEvent.InputTuple,
+    ContractUnpausedEvent.OutputTuple,
+    ContractUnpausedEvent.OutputObject
+  >;
+  getEvent(
     key: "EIP712DomainChanged"
   ): TypedContractEvent<
     EIP712DomainChangedEvent.InputTuple,
@@ -703,6 +793,13 @@ export interface RainbowRouter extends BaseContract {
     OwnerChangedEvent.InputTuple,
     OwnerChangedEvent.OutputTuple,
     OwnerChangedEvent.OutputObject
+  >;
+  getEvent(
+    key: "Paused"
+  ): TypedContractEvent<
+    PausedEvent.InputTuple,
+    PausedEvent.OutputTuple,
+    PausedEvent.OutputObject
   >;
   getEvent(
     key: "SwapTargetAdded"
@@ -726,6 +823,13 @@ export interface RainbowRouter extends BaseContract {
     TokenWithdrawnEvent.OutputObject
   >;
   getEvent(
+    key: "Unpaused"
+  ): TypedContractEvent<
+    UnpausedEvent.InputTuple,
+    UnpausedEvent.OutputTuple,
+    UnpausedEvent.OutputObject
+  >;
+  getEvent(
     key: "ValidSignerAdded"
   ): TypedContractEvent<
     ValidSignerAddedEvent.InputTuple,
@@ -741,6 +845,28 @@ export interface RainbowRouter extends BaseContract {
   >;
 
   filters: {
+    "ContractPaused(address)": TypedContractEvent<
+      ContractPausedEvent.InputTuple,
+      ContractPausedEvent.OutputTuple,
+      ContractPausedEvent.OutputObject
+    >;
+    ContractPaused: TypedContractEvent<
+      ContractPausedEvent.InputTuple,
+      ContractPausedEvent.OutputTuple,
+      ContractPausedEvent.OutputObject
+    >;
+
+    "ContractUnpaused(address)": TypedContractEvent<
+      ContractUnpausedEvent.InputTuple,
+      ContractUnpausedEvent.OutputTuple,
+      ContractUnpausedEvent.OutputObject
+    >;
+    ContractUnpaused: TypedContractEvent<
+      ContractUnpausedEvent.InputTuple,
+      ContractUnpausedEvent.OutputTuple,
+      ContractUnpausedEvent.OutputObject
+    >;
+
     "EIP712DomainChanged()": TypedContractEvent<
       EIP712DomainChangedEvent.InputTuple,
       EIP712DomainChangedEvent.OutputTuple,
@@ -774,6 +900,17 @@ export interface RainbowRouter extends BaseContract {
       OwnerChangedEvent.OutputObject
     >;
 
+    "Paused(address)": TypedContractEvent<
+      PausedEvent.InputTuple,
+      PausedEvent.OutputTuple,
+      PausedEvent.OutputObject
+    >;
+    Paused: TypedContractEvent<
+      PausedEvent.InputTuple,
+      PausedEvent.OutputTuple,
+      PausedEvent.OutputObject
+    >;
+
     "SwapTargetAdded(address)": TypedContractEvent<
       SwapTargetAddedEvent.InputTuple,
       SwapTargetAddedEvent.OutputTuple,
@@ -805,6 +942,17 @@ export interface RainbowRouter extends BaseContract {
       TokenWithdrawnEvent.InputTuple,
       TokenWithdrawnEvent.OutputTuple,
       TokenWithdrawnEvent.OutputObject
+    >;
+
+    "Unpaused(address)": TypedContractEvent<
+      UnpausedEvent.InputTuple,
+      UnpausedEvent.OutputTuple,
+      UnpausedEvent.OutputObject
+    >;
+    Unpaused: TypedContractEvent<
+      UnpausedEvent.InputTuple,
+      UnpausedEvent.OutputTuple,
+      UnpausedEvent.OutputObject
     >;
 
     "ValidSignerAdded(address)": TypedContractEvent<
