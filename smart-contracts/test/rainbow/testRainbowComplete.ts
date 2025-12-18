@@ -2,7 +2,7 @@ import { RainbowRouter, RainbowRouter__factory, IERC20Metadata__factory } from "
 import { network, ethers } from "hardhat";
 import { Signer, ZeroAddress } from "ethers";
 import { expect } from "chai";
-import { stealMoney } from "../../scripts/msc";
+import { stealMoney } from "../../util/testHelpers";
 import {
     createDummySwapCalldata,
     createDummyWarrant,

@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 import { Signer, ZeroAddress, TypedDataDomain } from "ethers";
-import { generateUniTxData } from "../../scripts/msc";
+import { generateUniTxData } from "../../util/testHelpers";
 
 /**
  * Helper functions to create dummy quotes, warrants, and permits for testing
