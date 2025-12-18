@@ -3,7 +3,7 @@ import { ERC20, IERC20 } from "../../typechain-types/contracts/interfaces/openze
 import { network } from "hardhat"
 import { Signer, ZeroAddress } from "ethers"
 import { ERC20__factory, IERC20__factory } from "../../typechain-types/factories/contracts/interfaces/openzeppelin"
-import { stealMoney } from "../../scripts/msc"
+import { stealMoney } from "../../util/testHelpers"
 import { expect } from "chai"
 const { ethers } = require("hardhat")
 

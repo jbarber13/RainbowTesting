@@ -5,8 +5,6 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { IERC20__factory } from "../typechain-types/factories/contracts/interfaces/openzeppelin";
 import { IERC20 } from "../typechain-types/contracts/interfaces/openzeppelin";
 import axios from "axios";
-import { generatePermitSignature } from "../scripts/msc";
-import { ExecutionRequest, Coupon as CouponInterface, Token as TokenInterface, RainbowExecutionInfo } from "../scripts/canoeInterface";
 import { NETWORK_CONFIGS } from "./networkConfig";
 
 
@@ -14,6 +12,52 @@ import { NETWORK_CONFIGS } from "./networkConfig";
 // A generic type for unknown nested objects, can be refined if their structure is known
 type AnyObject = Record<string, any>;
 
+// Execution and signing request interfaces
+export interface ExecutionRequest {
+    coupon: Coupon;
+    signingRequest?: SigningRequest;
+    blockaidSim?: boolean;
+    useOkuRouter?: boolean;
+}
+
+export interface SigningRequest {
+    typedData?: TypedDataSignature[];
+    permit2Address?: string;
+}
+
+export interface TypedDataSignature {
+    payload: TypedData;
+    signature?: string;
+}
+
+export interface TypedData {
+    types: Record<string, any>;
+    domain: Record<string, any>;
+    message: Record<string, any>;
+    primaryType: string;
+}
+
+export interface RainbowExecutionInfo {
+    // Response from execution_information API
+    approvals?: any[];
+    transactions?: any[];
+    trade?: any;
+    analysis?: any;
+    warrant?: any;
+    warrantTypedData?: any;
+    [key: string]: any;
+}
+
+// Permit signature interfaces
+export interface PermitOutput {
+    value: bigint;
+    nonce: bigint;
+    deadline: bigint;
+    permitStyle: 0 | 1 | 2;  // 0 = DAI, 1 = EIP-2612, 2 = PERMIT_2
+    v: number;
+    r: string;
+    s: string;
+}
 
 export interface BridgeInfo {
     sourceChainId?: number;
@@ -130,6 +174,162 @@ export type canoeParams = {
     usePermit?: boolean, // Optional flag to enable EIP-2612 permit signatures (deprecated)
     usePermit2?: boolean // Optional flag to enable Permit2 signatures (recommended)
 }
+
+// Permit signature generation
+export const generatePermitSignature = async (
+    signer: Signer,
+    chainId: number,
+    tokenAddress: string, // Address of the ERC-20 token
+    amount: bigint,      // The 'value' for the permit
+    spender: string,     // Address granted allowance
+    permitStyle: 0 | 1 | 2 = 1, // 0 = DAI, 1 = EIP-2612 (default), 2 = PERMIT_2
+    // Nonce will be fetched from the token contract
+    expiration?: number, // Optional: custom expiration timestamp (in seconds)
+): Promise<PermitOutput> => { // Return the desired Permit struct data
+
+    const ownerAddress = await signer.getAddress();
+    let deadline: number;
+
+    if (expiration == undefined) {
+        deadline = Math.floor(Date.now() / 1000) + 60 * 60; // 1 hour from now (default)
+    } else {
+        deadline = expiration;
+    }
+
+    // Handle Permit2 separately (different signature structure)
+    if (permitStyle === 2) {
+        // Permit2 SignatureTransfer
+        const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+
+        // Generate a unique nonce (Permit2 SignatureTransfer uses bitmap, not sequential nonces)
+        // Each nonce bit can only be used once. Common practice: use timestamp or random value
+        const nonce = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+
+        // Define Permit2 domain
+        const domain: TypedDataDomain = {
+            name: 'Permit2',
+            chainId: chainId,
+            verifyingContract: PERMIT2_ADDRESS,
+        };
+
+        // Define Permit2 SignatureTransfer types
+        const types = {
+            PermitTransferFrom: [
+                { name: 'permitted', type: 'TokenPermissions' },
+                { name: 'spender', type: 'address' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'deadline', type: 'uint256' }
+            ],
+            TokenPermissions: [
+                { name: 'token', type: 'address' },
+                { name: 'amount', type: 'uint256' }
+            ]
+        };
+
+        // Define values
+        const values = {
+            permitted: {
+                token: tokenAddress,
+                amount: amount.toString()
+            },
+            spender: spender,
+            nonce: nonce.toString(),
+            deadline: deadline.toString()
+        };
+
+        // Sign the typed data
+        const signature = await signer.signTypedData(domain, types, values);
+        const { v, r, s } = ethers.Signature.from(signature);
+
+        return {
+            value: amount,
+            nonce: nonce,
+            deadline: BigInt(deadline),
+            permitStyle: 2,
+            v, r, s
+        };
+    }
+
+    // Handle DAI and EIP-2612 permits (both use token-based nonces)
+    const tokenContract = ERC20__factory.connect(tokenAddress, signer);
+    let nonce: bigint = 0n;
+
+    try {
+        nonce = await tokenContract.nonces(ownerAddress);
+    } catch (error: any) {
+        console.warn(`WARN: Could not fetch nonce for ${tokenAddress}. This token might not support EIP-2612 (permit). Defaulting nonce to 0.`);
+    }
+
+    // Fetch the token name for the EIP-712 domain
+    let tokenName = "Unknown Token";
+    try {
+        tokenName = await tokenContract.name();
+    } catch (e) {
+        console.warn(`Could not fetch name for token ${tokenAddress}. Using default.`);
+    }
+
+    // Define the EIP-712 domain separator
+    const domain: TypedDataDomain = {
+        name: tokenName,
+        version: permitStyle === 0 ? '1' : '2', // DAI uses version '1', EIP-2612 uses '2'
+        chainId: chainId,
+        verifyingContract: tokenAddress,
+    };
+
+    // Define the EIP-712 types (DAI vs EIP-2612)
+    let types: any;
+    let values: any;
+
+    if (permitStyle === 0) {
+        // DAI-style permit
+        types = {
+            Permit: [
+                { name: "holder", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "nonce", type: "uint256" },
+                { name: "expiry", type: "uint256" },
+                { name: "allowed", type: "bool" }
+            ]
+        };
+        values = {
+            holder: ownerAddress,
+            spender: spender,
+            nonce: nonce.toString(),
+            expiry: deadline.toString(),
+            allowed: true
+        };
+    } else {
+        // EIP-2612 permit
+        types = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" },
+            ],
+        };
+        values = {
+            owner: ownerAddress,
+            spender: spender,
+            value: amount.toString(),
+            nonce: nonce.toString(),
+            deadline: deadline.toString(),
+        };
+    }
+
+    // Sign the typed data
+    const signature = await signer.signTypedData(domain, types, values);
+    const { v, r, s } = ethers.Signature.from(signature);
+
+    return {
+        value: amount,
+        nonce: nonce,
+        deadline: BigInt(deadline),
+        permitStyle: permitStyle,
+        v, r, s
+    };
+};
 
 //depricated
 export const getCanoeQuote = async (market: string, params: canoeParams) => {
@@ -629,7 +829,7 @@ export const getRouterQuote = async (market: string, params: any, baseUrl?: stri
 };
 
 export const getRainbowExecution = async (
-    coupon: CouponInterface,
+    coupon: Coupon,
     market: string,
     signingRequest?: any,
     baseUrl?: string
