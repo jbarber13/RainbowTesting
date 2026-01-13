@@ -1,8 +1,8 @@
-import { AddressLike, BigNumberish, BytesLike, ethers, Signer } from "ethers";
+import { AddressLike, BigNumberish, BytesLike, Signer } from "ethers";
 import { ISwapRouter02__factory } from "../typechain-types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { IERC20__factory } from "../typechain-types/factories/contracts/interfaces/openzeppelin";
-import { network } from "hardhat";
+import { network, ethers } from "hardhat";
 
 export type ExactInputSingleParams = {
     tokenIn: AddressLike,
@@ -45,14 +45,13 @@ export const stealMoney = async (
     tokenAddr: string,
     amount: BigNumberish
 ) => {
-    //fund with eth so we can steal from any addr that holds the token, including contracts
     await setBalance(from, ethers.parseEther("5"))
 
     await network.provider.request({
         method: "hardhat_impersonateAccount",
         params: [from],
     });
-    const robberee = await ethers.provider.getSigner(from);
+    const robberee = await ethers.getSigner(from);
     const money = IERC20__factory.connect(tokenAddr, robberee);
     await money.connect(robberee).transfer(to, amount);
     await network.provider.request({

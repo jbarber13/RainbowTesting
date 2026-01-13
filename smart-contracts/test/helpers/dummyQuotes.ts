@@ -55,7 +55,8 @@ export async function createDummyWarrant(
         nonce?: bigint;
         validBefore?: number;
         validAfter?: number;
-        useZeroSigner?: boolean; // Bypass signature verification
+        useZeroSigner?: boolean;
+        approvalTarget?: string;
         name?: string;
         version?: string;
     } = {}
@@ -64,22 +65,22 @@ export async function createDummyWarrant(
     const blockTimestamp = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000);
 
     const nonce = options.nonce ?? 1n;
-    const validBefore = options.validBefore ?? blockTimestamp + 3600; // 1 hour from now
-    const validAfter = options.validAfter ?? blockTimestamp - 300; // 5 minutes ago
+    const validBefore = options.validBefore ?? blockTimestamp + 3600;
+    const validAfter = options.validAfter ?? blockTimestamp - 300;
+    const approvalTarget = options.approvalTarget ?? routerAddress;
     const name = options.name ?? "Rainbow Router";
     const version = options.version ?? "1.0";
 
     const swapCallDataHash = ethers.keccak256(swapCallData);
     const dataHash = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(
-            ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-            [sellTokenAddress, buyTokenAddress, routerAddress, swapCallDataHash, sellAmount, feeAmount]
+            ['address', 'address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+            [sellTokenAddress, buyTokenAddress, routerAddress, approvalTarget, swapCallDataHash, sellAmount, feeAmount]
         )
     );
 
     const packedValidationData = nonce | (BigInt(validBefore) << 160n) | (BigInt(validAfter) << 208n);
 
-    // Use zero address to bypass signature verification
     if (options.useZeroSigner) {
         return {
             nonce,
@@ -90,7 +91,6 @@ export async function createDummyWarrant(
         };
     }
 
-    // Create EIP-712 signature
     const domain: TypedDataDomain = {
         name,
         version,
@@ -184,7 +184,8 @@ export async function createWrongSignerWarrant(
     routerAddress: string,
     swapCallData: string,
     sellAmount: bigint,
-    feeAmount: bigint
+    feeAmount: bigint,
+    approvalTarget?: string
 ) {
     const latestBlock = await ethers.provider.getBlock('latest');
     const blockTimestamp = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000);
@@ -192,12 +193,13 @@ export async function createWrongSignerWarrant(
     const nonce = 1n;
     const validBefore = blockTimestamp + 3600;
     const validAfter = blockTimestamp - 300;
+    const approvalTargetAddr = approvalTarget ?? routerAddress;
 
     const swapCallDataHash = ethers.keccak256(swapCallData);
     const dataHash = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(
-            ['address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
-            [sellTokenAddress, buyTokenAddress, routerAddress, swapCallDataHash, sellAmount, feeAmount]
+            ['address', 'address', 'address', 'address', 'bytes32', 'uint256', 'uint256'],
+            [sellTokenAddress, buyTokenAddress, routerAddress, approvalTargetAddr, swapCallDataHash, sellAmount, feeAmount]
         )
     );
 
@@ -222,15 +224,14 @@ export async function createWrongSignerWarrant(
         dataHash
     };
 
-    // Sign with wrong signer but claim it's from correct signer
     const signature = await wrongSigner.signTypedData(domain, types, value);
 
     return {
         nonce,
         validBefore,
         validAfter,
-        verifyingSigner: await correctSigner.getAddress(), // Claim correct signer
-        signature // But use wrong signer's signature
+        verifyingSigner: await correctSigner.getAddress(),
+        signature
     };
 }
 
