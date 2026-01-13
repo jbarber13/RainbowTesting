@@ -24,6 +24,37 @@ contract BaseAggregator is EIP712, Pausable {
     // @dev set of valid signers
     mapping(address => bool) public validSigners;
 
+    /// @dev Emitted when an order is filled
+    event OrderFilled(
+        address indexed sender,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 feeAmount,
+        address target
+    );
+
+    /// @dev Internal helper to emit OrderFilled event (reduces stack depth in callers)
+    function _emitOrderFilled(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 feeAmount,
+        address target
+    ) internal {
+        emit OrderFilled(
+            msg.sender,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut,
+            feeAmount,
+            target
+        );
+    }
+
     /// @dev modifier that prevents reentrancy attacks on specific methods
     modifier nonReentrant() {
         // On the first call to nonReentrant, status will be 1
@@ -112,23 +143,33 @@ contract BaseAggregator is EIP712, Pausable {
             }
         }
 
-        // 3 - Make sure we received the tokens
+        // 3 - Make sure we received the tokens, send to user, and emit event
         {
             uint256 finalTokenBalance = IERC20(buyTokenAddress).balanceOf(
                 address(this)
             );
             require(initialTokenBalance < finalTokenBalance, "NO_TOKENS");
+            uint256 tokensReceived = finalTokenBalance - initialTokenBalance;
+
+            // 4 - Send the received tokens back to the user
+            SafeERC20.safeTransfer(
+                IERC20(buyTokenAddress),
+                msg.sender,
+                tokensReceived
+            );
+
+            // 5 - Emit OrderFilled event
+            _emitOrderFilled(
+                address(0),
+                buyTokenAddress,
+                msg.value,
+                tokensReceived,
+                feeAmount,
+                target
+            );
         }
 
-        // 4 - Send the received tokens back to the user
-        SafeERC20.safeTransfer(
-            IERC20(buyTokenAddress),
-            msg.sender,
-            IERC20(buyTokenAddress).balanceOf(address(this)) -
-                initialTokenBalance
-        );
-
-        // 5 - Return the remaining ETH to the user (if any)
+        // 6 - Return the remaining ETH to the user (if any)
         {
             uint256 finalEthAmount = address(this).balance - feeAmount;
             if (finalEthAmount > initialEthAmount) {
@@ -401,15 +442,28 @@ contract BaseAggregator is EIP712, Pausable {
 
         require(ethDiff > 0, "NO_ETH_BACK");
 
+        uint256 fees = 0;
+        uint256 amountToUser = ethDiff;
+
         if (feePercentageBasisPoints > 0) {
-            uint256 fees = (ethDiff * feePercentageBasisPoints) / 1e18;
-            uint256 amountMinusFees = ethDiff - fees;
-            SafeTransferLib.safeTransferETH(msg.sender, amountMinusFees);
+            fees = (ethDiff * feePercentageBasisPoints) / 1e18;
+            amountToUser = ethDiff - fees;
+            SafeTransferLib.safeTransferETH(msg.sender, amountToUser);
             // when there's no fee, 1inch sends the funds directly to the user
             // we check to prevent sending 0 ETH in that case
         } else if (ethDiff > 0) {
             SafeTransferLib.safeTransferETH(msg.sender, ethDiff);
         }
+
+        // 7 - Emit OrderFilled event
+        _emitOrderFilled(
+            sellTokenAddress,
+            address(0),
+            sellAmount,
+            amountToUser,
+            fees,
+            target
+        );
     }
 
     /// @dev internal method that executes ERC20 to ERC20 token swaps with the ability to take a fee from the input
@@ -498,11 +552,23 @@ contract BaseAggregator is EIP712, Pausable {
 
         require(initialOutputTokenAmount < finalOutputTokenAmount, "NO_TOKENS");
 
+        uint256 tokensReceived = finalOutputTokenAmount - initialOutputTokenAmount;
+
         // 7 - Send tokens to the user
         SafeERC20.safeTransfer(
             IERC20(buyTokenAddress),
             msg.sender,
-            finalOutputTokenAmount - initialOutputTokenAmount
+            tokensReceived
+        );
+
+        // 8 - Emit OrderFilled event
+        _emitOrderFilled(
+            sellTokenAddress,
+            buyTokenAddress,
+            sellAmount,
+            tokensReceived,
+            feeAmount,
+            target
         );
     }
 }

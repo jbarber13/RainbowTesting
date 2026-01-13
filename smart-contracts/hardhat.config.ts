@@ -433,6 +433,7 @@ const config: HardhatUserConfig = {
   },
   solidity: {
     settings: {
+      viaIR: true,
       optimizer: {
         enabled: true,
         runs: 1000,

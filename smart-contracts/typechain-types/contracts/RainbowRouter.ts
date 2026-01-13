@@ -107,6 +107,7 @@ export interface RainbowRouterInterface extends Interface {
       | "ContractUnpaused"
       | "EIP712DomainChanged"
       | "EthWithdrawn"
+      | "OrderFilled"
       | "OwnerChanged"
       | "Paused"
       | "SwapTargetAdded"
@@ -318,6 +319,40 @@ export namespace EthWithdrawnEvent {
   export interface OutputObject {
     target: string;
     amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace OrderFilledEvent {
+  export type InputTuple = [
+    sender: AddressLike,
+    tokenIn: AddressLike,
+    tokenOut: AddressLike,
+    amountIn: BigNumberish,
+    amountOut: BigNumberish,
+    feeAmount: BigNumberish,
+    target: AddressLike
+  ];
+  export type OutputTuple = [
+    sender: string,
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: bigint,
+    amountOut: bigint,
+    feeAmount: bigint,
+    target: string
+  ];
+  export interface OutputObject {
+    sender: string;
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: bigint;
+    amountOut: bigint;
+    feeAmount: bigint;
+    target: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -788,6 +823,13 @@ export interface RainbowRouter extends BaseContract {
     EthWithdrawnEvent.OutputObject
   >;
   getEvent(
+    key: "OrderFilled"
+  ): TypedContractEvent<
+    OrderFilledEvent.InputTuple,
+    OrderFilledEvent.OutputTuple,
+    OrderFilledEvent.OutputObject
+  >;
+  getEvent(
     key: "OwnerChanged"
   ): TypedContractEvent<
     OwnerChangedEvent.InputTuple,
@@ -887,6 +929,17 @@ export interface RainbowRouter extends BaseContract {
       EthWithdrawnEvent.InputTuple,
       EthWithdrawnEvent.OutputTuple,
       EthWithdrawnEvent.OutputObject
+    >;
+
+    "OrderFilled(address,address,address,uint256,uint256,uint256,address)": TypedContractEvent<
+      OrderFilledEvent.InputTuple,
+      OrderFilledEvent.OutputTuple,
+      OrderFilledEvent.OutputObject
+    >;
+    OrderFilled: TypedContractEvent<
+      OrderFilledEvent.InputTuple,
+      OrderFilledEvent.OutputTuple,
+      OrderFilledEvent.OutputObject
     >;
 
     "OwnerChanged(address,address)": TypedContractEvent<

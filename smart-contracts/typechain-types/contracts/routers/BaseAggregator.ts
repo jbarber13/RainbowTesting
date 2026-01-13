@@ -92,7 +92,11 @@ export interface BaseAggregatorInterface extends Interface {
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "EIP712DomainChanged" | "Paused" | "Unpaused"
+    nameOrSignatureOrTopic:
+      | "EIP712DomainChanged"
+      | "OrderFilled"
+      | "Paused"
+      | "Unpaused"
   ): EventFragment;
 
   encodeFunctionData(
@@ -210,6 +214,40 @@ export namespace EIP712DomainChangedEvent {
   export type InputTuple = [];
   export type OutputTuple = [];
   export interface OutputObject {}
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace OrderFilledEvent {
+  export type InputTuple = [
+    sender: AddressLike,
+    tokenIn: AddressLike,
+    tokenOut: AddressLike,
+    amountIn: BigNumberish,
+    amountOut: BigNumberish,
+    feeAmount: BigNumberish,
+    target: AddressLike
+  ];
+  export type OutputTuple = [
+    sender: string,
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: bigint,
+    amountOut: bigint,
+    feeAmount: bigint,
+    target: string
+  ];
+  export interface OutputObject {
+    sender: string;
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: bigint;
+    amountOut: bigint;
+    feeAmount: bigint;
+    target: string;
+  }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
   export type Log = TypedEventLog<Event>;
@@ -493,6 +531,13 @@ export interface BaseAggregator extends BaseContract {
     EIP712DomainChangedEvent.OutputObject
   >;
   getEvent(
+    key: "OrderFilled"
+  ): TypedContractEvent<
+    OrderFilledEvent.InputTuple,
+    OrderFilledEvent.OutputTuple,
+    OrderFilledEvent.OutputObject
+  >;
+  getEvent(
     key: "Paused"
   ): TypedContractEvent<
     PausedEvent.InputTuple,
@@ -517,6 +562,17 @@ export interface BaseAggregator extends BaseContract {
       EIP712DomainChangedEvent.InputTuple,
       EIP712DomainChangedEvent.OutputTuple,
       EIP712DomainChangedEvent.OutputObject
+    >;
+
+    "OrderFilled(address,address,address,uint256,uint256,uint256,address)": TypedContractEvent<
+      OrderFilledEvent.InputTuple,
+      OrderFilledEvent.OutputTuple,
+      OrderFilledEvent.OutputObject
+    >;
+    OrderFilled: TypedContractEvent<
+      OrderFilledEvent.InputTuple,
+      OrderFilledEvent.OutputTuple,
+      OrderFilledEvent.OutputObject
     >;
 
     "Paused(address)": TypedContractEvent<
