@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: GPL-3.0
-pragma solidity =0.8.27;
+pragma solidity ^0.8.27;
 import "../interfaces/IERC2612.sol";
 import "../interfaces/IDAI.sol";
 import "../interfaces/uniswapV3/IPermit2.sol";

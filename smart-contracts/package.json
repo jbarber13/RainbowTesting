@@ -13,7 +13,8 @@
     "deploy": "npx hardhat --network localhost  run scripts/deploy.ts",
     "lint": "eslint . && prettier --list-different 'contracts/**/*.sol'",
     "prettier-sol": "prettier --write 'contracts/**/*.sol'",
-    "test": "npx hardhat test"
+    "test": "npx hardhat test test/base/*.ts",
+    "test:archive": "npx hardhat test test/archive-rpc/*.ts"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",

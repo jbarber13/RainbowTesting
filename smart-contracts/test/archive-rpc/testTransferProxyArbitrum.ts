@@ -1,9 +1,9 @@
 import { RainbowRouter, RainbowRouter__factory } from "../../typechain-types"
 import { ERC20, IERC20 } from "../../typechain-types/contracts/interfaces/openzeppelin"
-import { network } from "hardhat"
 import { Signer, ZeroAddress } from "ethers"
 import { ERC20__factory, IERC20__factory } from "../../typechain-types/factories/contracts/interfaces/openzeppelin"
 import { stealMoney } from "../../util/testHelpers"
+import { tryFork, FORK_CONFIGS } from "../../util/forkHelper"
 import { expect } from "chai"
 const { ethers } = require("hardhat")
 
@@ -19,9 +19,27 @@ const { ethers } = require("hardhat")
  * When users interact with PropellerSwap, the actual settlement happens through CoW Protocol's
  * contracts using this transfer proxy pattern.
  *
- * SECURITY REQUIREMENT: When target != approvalTarget, warrants are required.
+ * === CoW Protocol / PropellerSwap Integration Details ===
+ *
+ * 1. DUAL CONTRACT ARCHITECTURE:
+ *    - GPv2Settlement: Orchestrates settlement process, receives swap execution calldata,
+ *      cannot directly access user funds
+ *    - GPv2VaultRelayer: Handles token approvals and transfers, created during Settlement
+ *      contract deployment, explicitly blocked from direct interactions for security
+ *
+ * 2. PROPELLERSWAP INTEGRATION:
+ *    - PropellerSwap is a solver that participates in CoW Protocol auctions
+ *    - When Rainbow Router users interact with PropellerSwap, trades settle via CoW Protocol
+ *    - The transfer proxy pattern ensures user funds are protected
+ *
+ * 3. SECURITY BENEFITS:
+ *    - Separation of concerns: settlement logic vs. fund management
+ *    - Explicit protection against direct vault relayer interactions
+ *    - Defense-in-depth with both warrant + whitelist validation
+ *
+ * NOTE: Requires archive RPC (ARB_URL env var). Tests skip gracefully if unavailable.
  */
-describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () => {
+describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", function () {
     let Rainbow: RainbowRouter
 
     // CoW Protocol addresses on Arbitrum (used by PropellerSwap solver)
@@ -43,47 +61,35 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
     let WETH: IERC20
     let signer: Signer
 
-    it("Setup - Fork Arbitrum", async function (this: any) {
-        this.timeout(10000)
+    before(async function () {
+        this.timeout(30000)
 
-        await network.provider.request({
-            method: "hardhat_reset",
-            params: [
-                {
-                    forking: {
-                        jsonRpcUrl: process.env.ARB_URL!,
-                        blockNumber: 300000000,  // Arbitrum block from earlier 2025
-                    },
-                },
-            ],
-        })
+        // Try to fork Arbitrum - skip all tests if RPC unavailable
+        const success = await tryFork(FORK_CONFIGS.ARBITRUM)
+        if (!success) {
+            this.skip()
+        }
 
         signer = (await ethers.getSigners())[0]
-
         USDC = ERC20__factory.connect(USDC_ADDRESS, signer)
         WETH = IERC20__factory.connect(WETH_ADDRESS, signer)
     })
 
     it("Deploy Rainbow Router", async () => {
         Rainbow = await new RainbowRouter__factory(signer).deploy(name, version)
+        expect(await Rainbow.getAddress()).to.be.properAddress
 
         // Whitelist CoW Protocol contracts
-        const routersToWhitelist = [
-            { name: "CoW Protocol GPv2Settlement", address: COW_SETTLEMENT },
-            { name: "CoW Protocol GPv2VaultRelayer", address: COW_VAULT_RELAYER },
-        ]
-
-        console.log(`        Rainbow Router deployed at: ${await Rainbow.getAddress()}`)
+        const routersToWhitelist = [COW_SETTLEMENT, COW_VAULT_RELAYER]
 
         for (const router of routersToWhitelist) {
-            const tx = await Rainbow.connect(signer).updateSwapTargets(router.address, true)
-            await tx.wait()
-            console.log(`        ✓ Whitelisted ${router.name}: ${router.address}`)
+            await Rainbow.connect(signer).updateSwapTargets(router, true)
+            expect(await Rainbow.swapTargets(router)).to.be.true
         }
 
         // Allow ZeroAddress as valid signer (for testing warrant bypass scenarios)
-        const tx = await Rainbow.connect(signer).updateValidSigner(ZeroAddress, true)
-        await tx.wait()
+        await Rainbow.connect(signer).updateValidSigner(ZeroAddress, true)
+        expect(await Rainbow.validSigners(ZeroAddress)).to.be.true
     })
 
     // Helper function to create valid EIP-712 warrant signature
@@ -102,7 +108,6 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
         const rainbowAddress = await Rainbow.getAddress()
         const signerAddress = await signer.getAddress()
 
-        // Calculate hash of swap data
         const swapCallDataHash = ethers.keccak256(swapCallData)
         const dataHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(
@@ -111,13 +116,11 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             )
         )
 
-        // Pack validation data: nonce | (validBefore << 160) | (validAfter << 208)
         const nonceBI = BigInt(nonce)
         const validBeforeBI = BigInt(validBefore)
         const validAfterBI = BigInt(validAfter)
         const packedValueBI = nonceBI | (validBeforeBI << 160n) | (validAfterBI << 208n)
 
-        // EIP-712 domain
         const domain = {
             name: name,
             version: version,
@@ -125,7 +128,6 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             verifyingContract: rainbowAddress
         }
 
-        // EIP-712 types
         const types = {
             CanoeWarrant: [
                 { name: 'packedValidationData', type: 'uint256' },
@@ -133,13 +135,11 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             ]
         }
 
-        // EIP-712 value
         const value = {
             packedValidationData: packedValueBI,
             dataHash: dataHash
         }
 
-        // Sign with EIP-712
         const signature = await signer.signTypedData(domain, types, value)
 
         return {
@@ -151,20 +151,15 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
         }
     }
 
-    it("Should ALLOW CoW Protocol transfer proxy without warrant", async () => {
-        // Get USDC for test
+    it("Should ALLOW CoW Protocol transfer proxy with ZeroAddress warrant", async () => {
         await stealMoney(usdcWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
-
-        // Approve Rainbow Router to spend USDC
         await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
 
         const latestBlock = await ethers.provider.getBlock('latest')
         const currentTime = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
 
-        // Minimal calldata (CoW Protocol has complex settlement logic)
         const cowCalldata = "0x"
 
-        // Create warrant with ZeroAddress signer (no longer requires validation for transfer proxy)
         const warrant = {
             nonce: 1n,
             validBefore: currentTime + 3600,
@@ -173,12 +168,7 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             signature: "0x"
         }
 
-        console.log("\n        === Testing CoW Protocol transfer proxy without warrant requirement ===")
-        console.log(`        Settlement Contract: ${COW_SETTLEMENT}`)
-        console.log(`        Vault Relayer: ${COW_VAULT_RELAYER}`)
-        console.log(`        These are DIFFERENT, but warrant is no longer required`)
-
-        // Attempt to use CoW transfer proxy with ZeroAddress warrant - should now succeed (or fail for other reasons)
+        // Attempt to use CoW transfer proxy with ZeroAddress warrant
         try {
             await Rainbow.connect(signer).fillQuoteTokenToToken(
                 USDC_ADDRESS,
@@ -190,33 +180,24 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
                 0n,
                 warrant
             )
-            console.log(`        ✓ Transaction succeeded with ZeroAddress warrant`)
         } catch (error: any) {
             // May fail for other reasons (e.g., settlement data), but not warrant requirement
-            const errorMessage = error.message
-            expect(errorMessage).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
-            console.log(`        ✓ No warrant requirement error (swap failed for other reason)`)
+            expect(error.message).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
         }
     })
 
     it("Should SUCCEED CoW Protocol transfer proxy with valid warrant", async () => {
-        // Whitelist signer for warrant validation
         const signerAddress = await signer.getAddress()
         await Rainbow.connect(signer).updateValidSigner(signerAddress, true)
 
-        // Get USDC for test
         await stealMoney(usdcWhale, await signer.getAddress(), USDC_ADDRESS, usdcAmount)
-
-        // Approve Rainbow Router to spend USDC
         await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
 
         const latestBlock = await ethers.provider.getBlock('latest')
         const currentTime = latestBlock ? Number(latestBlock.timestamp) : Math.floor(Date.now() / 1000)
 
-        // Minimal calldata (real CoW settlements would have complex encoded data)
         const cowCalldata = "0x"
 
-        // Create VALID warrant with real signature
         const warrant = await createValidWarrant(
             USDC_ADDRESS,
             WETH_ADDRESS,
@@ -224,20 +205,14 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             COW_VAULT_RELAYER,
             cowCalldata,
             usdcAmount,
-            0n,  // feeAmount
-            999,  // nonce
-            currentTime + 3600,  // validBefore
-            currentTime - 300    // validAfter
+            0n,
+            999,
+            currentTime + 3600,
+            currentTime - 300
         )
 
-        console.log("\n        === Testing CoW Protocol with valid warrant ===")
-        console.log(`        Settlement: ${COW_SETTLEMENT}`)
-        console.log(`        Vault Relayer: ${COW_VAULT_RELAYER}`)
-        console.log(`        Warrant signer: ${warrant.verifyingSigner}`)
-
-        // Attempt the swap with valid warrant
         try {
-            const tx = await Rainbow.connect(signer).fillQuoteTokenToToken(
+            await Rainbow.connect(signer).fillQuoteTokenToToken(
                 USDC_ADDRESS,
                 WETH_ADDRESS,
                 COW_SETTLEMENT,
@@ -247,23 +222,16 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
                 0n,
                 warrant
             )
-            await tx.wait()
-            console.log(`        ✓ CoW Protocol swap succeeded with valid warrant!`)
         } catch (error: any) {
-            // Expected to fail without real CoW settlement data
-            const errorMessage = error.message
-            expect(errorMessage).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
-            console.log(`        ✓ Warrant check passed (swap failed for other reason: settlement data)`)
+            // Expected to fail without real CoW settlement data, but warrant check should pass
+            expect(error.message).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
         }
     })
 
     it("CoW Protocol / PropellerSwap: Verify approval routing", async () => {
-        // Note: This test verifies that approvals are made to the correct contract (VaultRelayer)
-
+        // This test verifies that approvals are made to the correct contract (VaultRelayer)
         const signerAddress = await signer.getAddress()
         await stealMoney(usdcWhale, signerAddress, USDC_ADDRESS, usdcAmount)
-
-        // Approve Rainbow Router
         await USDC.connect(signer).approve(await Rainbow.getAddress(), usdcAmount)
 
         const latestBlock = await ethers.provider.getBlock('latest')
@@ -271,7 +239,6 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
 
         const cowCalldata = "0x"
 
-        // Create valid warrant
         const warrant = await createValidWarrant(
             USDC_ADDRESS,
             WETH_ADDRESS,
@@ -285,17 +252,12 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
             currentTime - 300
         )
 
-        console.log("\n        === Verifying CoW Protocol approval routing ===")
-        console.log(`        Execution Target: ${COW_SETTLEMENT}`)
-        console.log(`        Approval Target: ${COW_VAULT_RELAYER}`)
-
         const rainbowAddress = await Rainbow.getAddress()
         const allowanceBefore = await USDC.allowance(rainbowAddress, COW_VAULT_RELAYER)
-        expect(allowanceBefore).to.eq(0n, "Allowance should be 0 before swap")
+        expect(allowanceBefore).to.eq(0n)
 
-        // Attempt the swap
         try {
-            const tx = await Rainbow.connect(signer).fillQuoteTokenToToken(
+            await Rainbow.connect(signer).fillQuoteTokenToToken(
                 USDC_ADDRESS,
                 WETH_ADDRESS,
                 COW_SETTLEMENT,       // Call goes here
@@ -305,47 +267,9 @@ describe("Transfer Proxy Pattern - Arbitrum (CoW Protocol / PropellerSwap)", () 
                 0n,
                 warrant
             )
-            await tx.wait()
-            console.log(`        ✓ Swap succeeded!`)
         } catch (error: any) {
             // Expected to fail without real settlement data, but approval routing is correct
-            console.log(`        ℹ Swap failed as expected (no settlement data): ${error.message.split('\n')[0].substring(0, 80)}...`)
+            expect(error.message).to.not.include("WARRANT_REQUIRED_FOR_PROXY")
         }
-
-        console.log(`        ✓ Transfer proxy pattern verified for CoW Protocol!`)
-        console.log(`        ✓ PropellerSwap (as CoW solver) is now compatible with Rainbow Router`)
-    })
-
-    it("Explanation: CoW Protocol & PropellerSwap integration", async () => {
-        console.log("\n        === CoW Protocol / PropellerSwap Integration ===")
-        console.log(`
-        CoW Protocol uses a sophisticated transfer proxy pattern for security:
-
-        1. DUAL CONTRACT ARCHITECTURE:
-           - GPv2Settlement (${COW_SETTLEMENT})
-             * Orchestrates the settlement process
-             * Receives the swap execution calldata
-             * Cannot directly access user funds
-
-           - GPv2VaultRelayer (${COW_VAULT_RELAYER})
-             * Handles token approvals and transfers
-             * Created during Settlement contract deployment
-             * Explicitly blocked from direct interactions for security
-
-        2. PROPELLERSWAP INTEGRATION:
-           - PropellerSwap is a solver that participates in CoW Protocol auctions
-           - When Rainbow Router users interact with PropellerSwap, trades settle via CoW Protocol
-           - The transfer proxy pattern ensures user funds are protected
-
-        3. WARRANT REQUIREMENT:
-           - Since Settlement ≠ VaultRelayer, warrant signatures are REQUIRED
-           - Backend must validate the correct contract pairing
-           - Prevents malicious parameter substitution
-
-        4. SECURITY BENEFITS:
-           - Separation of concerns: settlement logic vs. fund management
-           - Explicit protection against direct vault relayer interactions
-           - Defense-in-depth with both warrant + whitelist validation
-        `)
     })
 })

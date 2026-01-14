@@ -90,6 +90,7 @@ export interface RainbowRouterInterface extends Interface {
       | "owner"
       | "pause"
       | "paused"
+      | "renounceOwnership"
       | "swapTargets"
       | "transferOwnership"
       | "unpause"
@@ -108,7 +109,7 @@ export interface RainbowRouterInterface extends Interface {
       | "EIP712DomainChanged"
       | "EthWithdrawn"
       | "OrderFilled"
-      | "OwnerChanged"
+      | "OwnershipTransferred"
       | "Paused"
       | "SwapTargetAdded"
       | "SwapTargetRemoved"
@@ -189,6 +190,10 @@ export interface RainbowRouterInterface extends Interface {
   encodeFunctionData(functionFragment: "pause", values?: undefined): string;
   encodeFunctionData(functionFragment: "paused", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "renounceOwnership",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "swapTargets",
     values: [AddressLike]
   ): string;
@@ -247,6 +252,10 @@ export interface RainbowRouterInterface extends Interface {
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "pause", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "swapTargets",
     data: BytesLike
@@ -360,12 +369,12 @@ export namespace OrderFilledEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace OwnerChangedEvent {
-  export type InputTuple = [newOwner: AddressLike, oldOwner: AddressLike];
-  export type OutputTuple = [newOwner: string, oldOwner: string];
+export namespace OwnershipTransferredEvent {
+  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
+  export type OutputTuple = [previousOwner: string, newOwner: string];
   export interface OutputObject {
+    previousOwner: string;
     newOwner: string;
-    oldOwner: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -602,6 +611,8 @@ export interface RainbowRouter extends BaseContract {
 
   paused: TypedContractMethod<[], [boolean], "view">;
 
+  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
   swapTargets: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   transferOwnership: TypedContractMethod<
@@ -751,6 +762,9 @@ export interface RainbowRouter extends BaseContract {
     nameOrSignature: "paused"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
+    nameOrSignature: "renounceOwnership"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "swapTargets"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
@@ -830,11 +844,11 @@ export interface RainbowRouter extends BaseContract {
     OrderFilledEvent.OutputObject
   >;
   getEvent(
-    key: "OwnerChanged"
+    key: "OwnershipTransferred"
   ): TypedContractEvent<
-    OwnerChangedEvent.InputTuple,
-    OwnerChangedEvent.OutputTuple,
-    OwnerChangedEvent.OutputObject
+    OwnershipTransferredEvent.InputTuple,
+    OwnershipTransferredEvent.OutputTuple,
+    OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
     key: "Paused"
@@ -942,15 +956,15 @@ export interface RainbowRouter extends BaseContract {
       OrderFilledEvent.OutputObject
     >;
 
-    "OwnerChanged(address,address)": TypedContractEvent<
-      OwnerChangedEvent.InputTuple,
-      OwnerChangedEvent.OutputTuple,
-      OwnerChangedEvent.OutputObject
+    "OwnershipTransferred(address,address)": TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
     >;
-    OwnerChanged: TypedContractEvent<
-      OwnerChangedEvent.InputTuple,
-      OwnerChangedEvent.OutputTuple,
-      OwnerChangedEvent.OutputObject
+    OwnershipTransferred: TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
     >;
 
     "Paused(address)": TypedContractEvent<

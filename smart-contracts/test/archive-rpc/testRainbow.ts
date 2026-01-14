@@ -1,15 +1,19 @@
 import { RainbowRouter, RainbowRouter__factory } from "../../typechain-types"
 import { ERC20, IERC20 } from "../../typechain-types/contracts/interfaces/openzeppelin"
-import { network } from "hardhat"
 import { AbiCoder, Interface, Signer, ZeroAddress } from "ethers"
 import { ERC20__factory, IERC20__factory } from "../../typechain-types/factories/contracts/interfaces/openzeppelin"
 import { generatePermitSignature } from "../../util/canoeHelper"
 import { generateUniTxData, stealMoney } from "../../util/testHelpers"
+import { tryFork, FORK_CONFIGS } from "../../util/forkHelper"
 import { expect } from "chai"
 import { Sign } from "crypto"
 const { ethers } = require("hardhat")
 
-describe("Test Rainbow Specific Functions", () => {
+/**
+ * Test Rainbow Specific Functions
+ * NOTE: Requires archive RPC (OP_URL env var). Tests skip gracefully if unavailable.
+ */
+describe("Test Rainbow Specific Functions", function () {
 
     const name = "Rainbow Router" // EIP-712 Domain Name
     const version = "1.0" // EIP-712 Domain Version
@@ -24,21 +28,14 @@ describe("Test Rainbow Specific Functions", () => {
     let recipientAddress: string
     let Rainbow: RainbowRouter
 
-    before(async () => {
+    before(async function () {
+        this.timeout(30000)
 
-        await network.provider.request({
-            method: "hardhat_reset",
-            params: [
-                {
-                    forking: {
-                        jsonRpcUrl: process.env.OP_URL!,
-                        blockNumber: 143608382, // Block where whale has 5795.57 USDC
-                    },
-                },
-            ],
-        })
-
-
+        // Try to fork Optimism - skip all tests if RPC unavailable
+        const success = await tryFork(FORK_CONFIGS.OPTIMISM)
+        if (!success) {
+            this.skip()
+        }
 
         const signers = await ethers.getSigners()
         owner = signers[0]
@@ -102,7 +99,7 @@ describe("Test Rainbow Specific Functions", () => {
 
         it("Should prevent non-owner from updating swap targets", async () => {
             await expect(Rainbow.connect(nonOwner).updateSwapTargets(newTarget, true))
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
 
         it("Should handle multiple add/remove cycles correctly", async () => {
@@ -152,7 +149,7 @@ describe("Test Rainbow Specific Functions", () => {
 
         it("Should prevent non-owner from updating valid signers", async () => {
             await expect(Rainbow.connect(nonOwner).updateValidSigner(newSigner, true))
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
 
         it("Should allow adding zero address as valid signer (to bypass signature check)", async () => {
@@ -211,7 +208,7 @@ describe("Test Rainbow Specific Functions", () => {
 
         it("Should prevent non-owner from withdrawing tokens", async () => {
             await expect(Rainbow.connect(nonOwner).withdrawToken(usdcAddress, recipientAddress, withdrawAmount))
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
 
         it("Should revert if withdrawing more tokens than balance (via SafeERC20)", async () => {
@@ -296,7 +293,7 @@ describe("Test Rainbow Specific Functions", () => {
 
         it("Should prevent non-owner from withdrawing ETH", async () => {
             await expect(Rainbow.connect(nonOwner).withdrawEth(recipientAddress, withdrawAmount))
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
 
         it("Should revert if withdrawing more ETH than balance", async () => {
@@ -362,24 +359,19 @@ describe("Test Rainbow Specific Functions", () => {
 
         it("Should allow current owner to transfer ownership", async () => {
             await expect(Rainbow.connect(owner).transferOwnership(newOwnerAddress))
-                .to.emit(Rainbow, "OwnerChanged")
-                .withArgs(newOwnerAddress, currentOwnerAddress)
+                .to.emit(Rainbow, "OwnershipTransferred")
+                .withArgs(currentOwnerAddress, newOwnerAddress)
             expect(await Rainbow.owner()).to.equal(newOwnerAddress)
         })
 
         it("Should prevent transferring ownership to the zero address", async () => {
             await expect(Rainbow.connect(owner).transferOwnership(ZeroAddress))
-                .to.be.revertedWith("ZERO_ADDRESS")
-        })
-
-        it("Should prevent transferring ownership to the current owner", async () => {
-            await expect(Rainbow.connect(owner).transferOwnership(currentOwnerAddress))
-                .to.be.revertedWith("SAME_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableInvalidOwner")
         })
 
         it("Should prevent non-owner from transferring ownership", async () => {
             await expect(Rainbow.connect(nonOwner).transferOwnership(recipientAddress)) // Attempt to transfer to recipient
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
 
         it("New owner should be able to call owner-only functions", async () => {
@@ -400,7 +392,7 @@ describe("Test Rainbow Specific Functions", () => {
             // Test an owner-only function using the old owner (owner signer)
             const testSigner = ethers.Wallet.createRandom().address
             await expect(Rainbow.connect(owner).updateValidSigner(testSigner, true))
-                .to.be.revertedWith("ONLY_OWNER")
+                .to.be.revertedWithCustomError(Rainbow, "OwnableUnauthorizedAccount")
         })
     })
 })

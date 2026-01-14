@@ -1,14 +1,18 @@
 import { RainbowRouter, RainbowRouter__factory } from "../../typechain-types"
 import { ERC20, IERC20 } from "../../typechain-types/contracts/interfaces/openzeppelin"
-import { network } from "hardhat"
 import { Interface, Signer, ZeroAddress } from "ethers"
 import { ERC20__factory, IERC20__factory } from "../../typechain-types/factories/contracts/interfaces/openzeppelin"
 import { generatePermitSignature } from "../../util/canoeHelper"
 import { generateUniTxData, stealMoney } from "../../util/testHelpers"
+import { tryFork, FORK_CONFIGS } from "../../util/forkHelper"
 import { expect } from "chai"
 const { ethers } = require("hardhat")
 
-describe("Permit Signature", () => {
+/**
+ * Permit Signature Tests
+ * NOTE: Requires archive RPC (OP_URL env var). Tests skip gracefully if unavailable.
+ */
+describe("Permit Signature", function () {
     let Rainbow: RainbowRouter
     const routerAddr = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
     const universalRouter = "0xCb1355ff08Ab38bBCE60111F1bb2B784bE25D7e8" // Example address, adjust if needed
@@ -24,24 +28,14 @@ describe("Permit Signature", () => {
     let WETH: IERC20
     let signer: Signer
 
-    before(async () => {
-        // Setup before all tests if needed
-    })
+    before(async function () {
+        this.timeout(30000)
 
-    it("Setup", async function (this: any) {
-        this.timeout(10000)
-
-        await network.provider.request({
-            method: "hardhat_reset",
-            params: [
-                {
-                    forking: {
-                        jsonRpcUrl: process.env.OP_URL!,
-                        blockNumber: 143608382, // Block where whale has 5795.57 USDC
-                    },
-                },
-            ],
-        })
+        // Try to fork Optimism - skip all tests if RPC unavailable
+        const success = await tryFork(FORK_CONFIGS.OPTIMISM)
+        if (!success) {
+            this.skip()
+        }
 
         signer = (await ethers.getSigners())[0]
 

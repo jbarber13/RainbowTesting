@@ -134,7 +134,7 @@ describe("Admin", function () {
     // 3 - Attempt to withdraw the tokens using a non-owner account
     await expect(
       instance.connect(nonOwner).withdrawToken(wethAddress, receiverAddress, amount)
-    ).to.be.revertedWith("ONLY_OWNER"); // Assuming OpenZeppelin's Ownable or similar
+    ).to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
   });
 
   it("Should be able to withdraw ETH", async function () {
@@ -188,7 +188,7 @@ describe("Admin", function () {
     // 3 - Attempt to withdraw the ETH using a non-owner account
     await expect(
       instance.connect(nonOwner).withdrawEth(receiverAddress, amount)
-    ).to.be.revertedWith("ONLY_OWNER");
+    ).to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
   });
 
   it("Should be able to add swap targets", async function () {
@@ -231,7 +231,7 @@ describe("Admin", function () {
 
     await expect(
       instance.connect(nonOwner).updateSwapTargets(targetAddress, true)
-    ).to.be.revertedWith("ONLY_OWNER");
+    ).to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
   });
 
   it("Should revert if attempting to remove swap targets when sender is not the owner", async function () {
@@ -245,14 +245,14 @@ describe("Admin", function () {
 
     await expect(
       instance.connect(nonOwner).updateSwapTargets(targetAddress, false)
-    ).to.be.revertedWith("ONLY_OWNER");
+    ).to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
   });
 
   it("Should revert if attempting to transfer ownership to ZERO_ADDRESS", async function () {
     const [owner] = signers;
     await expect(
       instance.connect(owner).transferOwnership(hre.ethers.ZeroAddress)
-    ).to.be.revertedWith("ZERO_ADDRESS"); 
+    ).to.be.revertedWithCustomError(instance, "OwnableInvalidOwner");
   });
 
   it("Should be able to transfer ownership", async function () {
@@ -263,10 +263,8 @@ describe("Admin", function () {
     const transferTx = instance.connect(owner).transferOwnership(newOwnerAddress);
 
     await expect(transferTx)
-      .to.emit(instance, "OwnerChanged") // Standard OpenZeppelin event name
-      .withArgs(newOwnerAddress, previousOwnerAddress);
-    // OR .to.emit(instance, "OwnerChanged") // If your contract uses a custom event
-    // .withArgs(newOwnerAddress, previousOwnerAddress); // Check your event's argument order
+      .to.emit(instance, "OwnershipTransferred")
+      .withArgs(previousOwnerAddress, newOwnerAddress);
 
     const currentOwner = await instance.owner();
     expect(currentOwner).to.equal(newOwnerAddress);
@@ -283,7 +281,7 @@ describe("Admin", function () {
 
     await expect(
       instance.connect(nonOwner).transferOwnership(newOwnerAddress)
-    ).to.be.revertedWith("ONLY_OWNER"); // Or "Ownable: caller is not the owner"
+    ).to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
   });
 
   it('Should revert if an attacker attempts "Approval snatching" from a victim that previously approved an ERC20 token on RainbowRouter', async function () {
@@ -460,7 +458,7 @@ describe("Admin", function () {
       const [, nonOwner] = signers;
 
       await expect(instance.connect(nonOwner).pause())
-        .to.be.revertedWith("ONLY_OWNER");
+        .to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
     });
 
     it("should revert if non-owner tries to unpause", async () => {
@@ -468,7 +466,7 @@ describe("Admin", function () {
 
       await instance.connect(owner).pause();
       await expect(instance.connect(nonOwner).unpause())
-        .to.be.revertedWith("ONLY_OWNER");
+        .to.be.revertedWithCustomError(instance, "OwnableUnauthorizedAccount");
 
       // Cleanup: unpause for next tests
       await instance.connect(owner).unpause();

@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: GPL-3.0
-pragma solidity =0.8.27;
+pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -8,10 +8,7 @@ import "../libraries/SafeTransferLib.sol";
 import "../libraries/CanoeHelper.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import "../interfaces/openzeppelin/Pausable.sol";
-
-//testing
-import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /// @title Rainbow base aggregator contract
 contract BaseAggregator is EIP712, Pausable {
@@ -248,6 +245,9 @@ contract BaseAggregator is EIP712, Pausable {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
+        // 0 - Verify permit amount matches sell amount
+        require(permitData.value == sellAmount, "PERMIT_AMOUNT_MISMATCH");
+
         // 1 - Apply permit
         // NOTE: For Permit2, this transfers tokens directly to address(this)
         // NOTE: For DAI/EIP-2612, this only grants allowance
@@ -258,7 +258,7 @@ contract BaseAggregator is EIP712, Pausable {
             address(this)
         );
 
-        //2 - Call fillQuoteTokenToToken
+        // 2 - Call fillQuoteTokenToToken
         // Skip transferFrom if Permit2 (tokens already transferred)
         bool skipTransferFrom = (permitData.permitStyle == PermitHelper.PermitStyle.PERMIT_2);
         _fillQuoteTokenToToken(
@@ -337,6 +337,9 @@ contract BaseAggregator is EIP712, Pausable {
         onlyApprovedTarget(approvalTarget)
         onlyApprovedSigner(warrant.verifyingSigner)
     {
+        // 0 - Verify permit amount matches sell amount
+        require(permitData.value == sellAmount, "PERMIT_AMOUNT_MISMATCH");
+
         // 1 - Apply permit
         // NOTE: For Permit2, this transfers tokens directly to address(this)
         // NOTE: For DAI/EIP-2612, this only grants allowance
@@ -347,7 +350,7 @@ contract BaseAggregator is EIP712, Pausable {
             address(this)
         );
 
-        // 2 - call fillQuoteTokenToEth
+        // 2 - Call fillQuoteTokenToEth
         // Skip transferFrom if Permit2 (tokens already transferred)
         bool skipTransferFrom = (permitData.permitStyle == PermitHelper.PermitStyle.PERMIT_2);
         _fillQuoteTokenToEth(
@@ -519,16 +522,11 @@ contract BaseAggregator is EIP712, Pausable {
             sellAmount - feeAmount
         );
 
-        //console.log("SENDING TX: ");
-
         // 4 - Call the encoded swap function call on the contract at `target`,
         // passing along any ETH attached to this function call to cover protocol fees.
         (bool success, bytes memory res) = target.call{value: msg.value}(
             swapCallData
         );
-
-        //console.log("TX SENT: ", success);
-        //console.log("Tokens Received: ", IERC20(buyTokenAddress).balanceOf(address(this)) - initialOutputTokenAmount);
 
         // Get the revert message of the call and revert with it if the call failed
         if (!success) {

@@ -6,5 +6,6 @@ export type { cryptography };
 import type * as math from "./math";
 export type { math };
 export type { Address } from "./Address";
+export type { Pausable } from "./Pausable";
 export type { ShortStrings } from "./ShortStrings";
 export type { Strings } from "./Strings";

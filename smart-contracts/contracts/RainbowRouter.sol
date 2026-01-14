@@ -52,22 +52,18 @@
  */
 
 //SPDX-License-Identifier: GPL-3.0
-pragma solidity =0.8.27;
+pragma solidity ^0.8.27;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./routers/BaseAggregator.sol";
 import "./libraries/SafeTransferLib.sol";
 
 
 /// @title Rainbow swap aggregator contract
-contract RainbowRouter is BaseAggregator {
-    /// @dev The address that is the current owner of this contract
-    address public owner;
+contract RainbowRouter is BaseAggregator, Ownable {
     string public name;
     string public version;
-
-    /// @dev Event emitted when the owner changes
-    event OwnerChanged(address indexed newOwner, address indexed oldOwner);
 
     /// @dev Event emitted when a swap target gets added
     event SwapTargetAdded(address indexed target);
@@ -97,14 +93,7 @@ contract RainbowRouter is BaseAggregator {
     /// @dev Event emitted when the contract is unpaused
     event ContractUnpaused(address indexed account);
 
-    /// @dev modifier that ensures only the owner is allowed to call a specific method
-    modifier onlyOwner() {
-        require(msg.sender == owner, "ONLY_OWNER");
-        _;
-    }
-
-    constructor(string memory _name, string memory _version) BaseAggregator(_name, _version) {
-        owner = msg.sender;
+    constructor(string memory _name, string memory _version) BaseAggregator(_name, _version) Ownable(msg.sender) {
         status = 1;
         name = _name;
         version = _version;
@@ -115,7 +104,7 @@ contract RainbowRouter is BaseAggregator {
     /// This is done by evaluating the value of status, which is set to 2
     /// only during swaps due to the "nonReentrant" modifier
     receive() external payable {
-        require(status == 2 || msg.sender == owner, "NO_RECEIVE");
+        require(status == 2 || msg.sender == owner(), "NO_RECEIVE");
     }
 
     /// @dev method to add or remove swap targets from swapTargets
@@ -183,16 +172,5 @@ contract RainbowRouter is BaseAggregator {
         require(to != address(0), "ZERO_ADDRESS");
         SafeTransferLib.safeTransferETH(to, amount);
         emit EthWithdrawn(to, amount);
-    }
-
-    /// @dev Transfers ownership of the contract to a new account (`newOwner`).
-    /// @param newOwner address of the new owner
-    /// Can only be called by the current owner.
-    function transferOwnership(address newOwner) external virtual onlyOwner {
-        require(newOwner != address(0), "ZERO_ADDRESS");
-        require(newOwner != owner, "SAME_OWNER");
-        address previousOwner = owner;
-        owner = newOwner;
-        emit OwnerChanged(newOwner, previousOwner);
     }
 }

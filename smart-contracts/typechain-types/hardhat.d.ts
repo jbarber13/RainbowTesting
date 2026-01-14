@@ -14,6 +14,10 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Ownable__factory>;
+    getContractFactory(
       name: "IERC5267",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC5267__factory>;
@@ -49,6 +53,10 @@ declare module "hardhat/types/runtime" {
       name: "Math",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Math__factory>;
+    getContractFactory(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Pausable__factory>;
     getContractFactory(
       name: "ShortStrings",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -151,6 +159,11 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.BaseAggregator__factory>;
 
     getContractAt(
+      name: "Ownable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Ownable>;
+    getContractAt(
       name: "IERC5267",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -195,6 +208,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.Math>;
+    getContractAt(
+      name: "Pausable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Pausable>;
     getContractAt(
       name: "ShortStrings",
       address: string | ethers.Addressable,
@@ -322,6 +340,10 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.BaseAggregator>;
 
     deployContract(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
       name: "IERC5267",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC5267>;
@@ -357,6 +379,10 @@ declare module "hardhat/types/runtime" {
       name: "Math",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Math>;
+    deployContract(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
     deployContract(
       name: "ShortStrings",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -459,6 +485,11 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.BaseAggregator>;
 
     deployContract(
+      name: "Ownable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
       name: "IERC5267",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -503,6 +534,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Math>;
+    deployContract(
+      name: "Pausable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
     deployContract(
       name: "ShortStrings",
       args: any[],
